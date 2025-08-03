@@ -22,7 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -36,9 +38,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -51,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -77,6 +82,25 @@ fun GoodsManagementScreen(
     val selectedSortOption by viewModel.selectedSortOption.collectAsState()
     val showSortMenu by viewModel.showSortMenu.collectAsState()
     
+    // 详情面板和对话框状态
+    val selectedGoods by viewModel.selectedGoods.collectAsState()
+    val showGoodsDetail by viewModel.showGoodsDetail.collectAsState()
+    val showOutboundReasonDialog by viewModel.showOutboundReasonDialog.collectAsState()
+    val showStockAdjustmentDialog by viewModel.showStockAdjustmentDialog.collectAsState()
+    val showFinalConfirmDialog by viewModel.showFinalConfirmDialog.collectAsState()
+    val outboundQuantity by viewModel.outboundQuantity.collectAsState()
+    
+    // 批量下架相关状态
+    val isBatchDelistMode by viewModel.isBatchDelistMode.collectAsState()
+    val selectedGoodsIds by viewModel.selectedGoodsIds.collectAsState()
+    val problemGoodsIds by viewModel.problemGoodsIds.collectAsState()
+    val showBatchDelistConfirmDialog by viewModel.showBatchDelistConfirmDialog.collectAsState()
+    val showBatchCancelConfirmDialog by viewModel.showBatchCancelConfirmDialog.collectAsState()
+    val showMoreOptionsMenu by viewModel.showMoreOptionsMenu.collectAsState()
+    
+    // 分类修改相关状态
+    val showCategorySelector by viewModel.showCategorySelector.collectAsState()
+    
     // 按分类分组
     val groupedGoods = remember(filteredGoods) {
         viewModel.getGroupedGoods(filteredGoods)
@@ -89,17 +113,28 @@ fun GoodsManagementScreen(
     
     Scaffold(
         topBar = {
-            GoodsTopAppBar(
-                isSearchExpanded = isSearchExpanded,
-                searchText = searchText,
-                onSearchTextChange = viewModel::updateSearchText,
-                onSearchToggle = viewModel::toggleSearchExpanded,
-                showSortMenu = showSortMenu,
-                selectedSortOption = selectedSortOption,
-                onSortMenuToggle = viewModel::toggleSortMenu,
-                onSortOptionSelected = viewModel::selectSortOption,
-                lowStockCount = lowStockCount
-            )
+            if (isBatchDelistMode) {
+                BatchDelistTopAppBar(
+                    selectedCount = selectedGoodsIds.size,
+                    onCancel = viewModel::showBatchCancelConfirmDialog,
+                    onConfirm = viewModel::showBatchDelistConfirmDialog
+                )
+            } else {
+                GoodsTopAppBar(
+                    isSearchExpanded = isSearchExpanded,
+                    searchText = searchText,
+                    onSearchTextChange = viewModel::updateSearchText,
+                    onSearchToggle = viewModel::toggleSearchExpanded,
+                    showSortMenu = showSortMenu,
+                    selectedSortOption = selectedSortOption,
+                    onSortMenuToggle = viewModel::toggleSortMenu,
+                    onSortOptionSelected = viewModel::selectSortOption,
+                    lowStockCount = lowStockCount,
+                    showMoreOptionsMenu = showMoreOptionsMenu,
+                    onMoreOptionsToggle = viewModel::toggleMoreOptionsMenu,
+                    onBatchDelistClick = viewModel::enterBatchDelistMode
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -128,10 +163,108 @@ fun GoodsManagementScreen(
             )
             
             // 商品列表
-            GoodsList(
-                groupedGoods = groupedGoods,
-                modifier = Modifier.fillMaxSize()
+            Box(modifier = Modifier.fillMaxSize()) {
+                GoodsList(
+                    groupedGoods = groupedGoods,
+                    categories = categories,
+                    isBatchDelistMode = isBatchDelistMode,
+                    selectedGoodsIds = selectedGoodsIds,
+                    problemGoodsIds = problemGoodsIds,
+                    onGoodsClick = if (isBatchDelistMode) null else viewModel::selectGoods,
+                    onGoodsToggleSelection = if (isBatchDelistMode) viewModel::toggleGoodsSelection else null,
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                // 底部信息条（批量模式时显示）
+                if (isBatchDelistMode) {
+                    BottomInfoBar(
+                        selectedCount = selectedGoodsIds.size,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+            }
+        }
+        
+        // 详情面板
+        selectedGoods?.let { goods ->
+            if (showGoodsDetail) {
+                GoodsDetailBottomSheet(
+                    goods = goods,
+                    categories = categories,
+                    onDismiss = viewModel::closeGoodsDetail,
+                    onInboundClick = {
+                        // TODO: 实现入库功能
+                    },
+                    onOutboundClick = viewModel::showOutboundReasonDialog,
+                    onCategoryEditClick = viewModel::showCategorySelector
+                )
+            }
+        }
+        
+        // 出库原因选择对话框
+        if (showOutboundReasonDialog) {
+            OutboundReasonDialog(
+                onDismiss = viewModel::hideOutboundReasonDialog,
+                onReasonSelected = viewModel::selectOutboundReason
             )
+        }
+        
+        // 库存调整对话框
+        selectedGoods?.let { goods ->
+            if (showStockAdjustmentDialog) {
+                StockAdjustmentDialog(
+                    goods = goods,
+                    outboundQuantity = outboundQuantity,
+                    onDismiss = viewModel::hideStockAdjustmentDialog,
+                    onQuantityChange = viewModel::updateOutboundQuantity,
+                    onIncrease = viewModel::increaseOutboundQuantity,
+                    onDecrease = viewModel::decreaseOutboundQuantity,
+                    onConfirm = viewModel::confirmOutbound
+                )
+            }
+        }
+        
+        // 最终确认对话框
+        selectedGoods?.let { goods ->
+            if (showFinalConfirmDialog) {
+                FinalConfirmDialog(
+                    goods = goods,
+                    outboundQuantity = outboundQuantity,
+                    onDismiss = viewModel::hideFinalConfirmDialog,
+                    onConfirm = viewModel::executeOutbound
+                )
+            }
+        }
+        
+        // 批量下架确认对话框
+        if (showBatchDelistConfirmDialog) {
+            BatchDelistConfirmDialog(
+                selectedCount = selectedGoodsIds.size,
+                onDismiss = viewModel::hideBatchDelistConfirmDialog,
+                onConfirm = viewModel::executeBatchDelist
+            )
+        }
+        
+        // 批量下架取消确认对话框
+        if (showBatchCancelConfirmDialog) {
+            BatchCancelConfirmDialog(
+                onDismiss = viewModel::hideBatchCancelConfirmDialog,
+                onConfirm = viewModel::confirmCancelBatchDelist
+            )
+        }
+        
+        // 分类选择对话框
+        selectedGoods?.let { goods ->
+            if (showCategorySelector) {
+                CategorySelectorDialog(
+                    categories = categories,
+                    currentCategoryId = goods.category,
+                    onDismiss = viewModel::hideCategorySelector,
+                    onCategorySelected = { newCategoryId ->
+                        viewModel.updateGoodsCategory(goods.id, newCategoryId)
+                    }
+                )
+            }
         }
     }
 }
@@ -148,6 +281,9 @@ fun GoodsTopAppBar(
     onSortMenuToggle: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     lowStockCount: Int = 0,
+    showMoreOptionsMenu: Boolean = false,
+    onMoreOptionsToggle: () -> Unit = {},
+    onBatchDelistClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -203,7 +339,7 @@ fun GoodsTopAppBar(
             Box {
                 IconButton(onClick = onSortMenuToggle) {
                     Icon(
-                        imageVector = Icons.Filled.MoreVert,
+                        imageVector = Icons.Filled.Menu,
                         contentDescription = "排序"
                     )
                 }
@@ -221,6 +357,31 @@ fun GoodsTopAppBar(
                             } else null
                         )
                     }
+                }
+            }
+            
+            // 更多操作图标和菜单
+            Box {
+                IconButton(onClick = onMoreOptionsToggle) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = "更多操作"
+                    )
+                }
+                
+                DropdownMenu(
+                    expanded = showMoreOptionsMenu,
+                    onDismissRequest = { onMoreOptionsToggle() }
+                ) {
+                    DropdownMenuItem(
+                        text = { 
+                            Text(
+                                text = "商品批量下架",
+                                style = MaterialTheme.typography.bodySmall
+                            ) 
+                        },
+                        onClick = onBatchDelistClick
+                    )
                 }
             }
         },
@@ -282,9 +443,75 @@ fun CategoryChip(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BatchDelistTopAppBar(
+    selectedCount: Int,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    TopAppBar(
+        title = {
+            Text(
+                text = "选择要下架的商品",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Medium
+            )
+        },
+        navigationIcon = {
+            TextButton(onClick = onCancel) {
+                Text("取消")
+            }
+        },
+        actions = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = selectedCount > 0
+            ) {
+                Text(
+                    text = "确认下架",
+                    color = if (selectedCount > 0) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    }
+                )
+            }
+        },
+        modifier = modifier
+    )
+}
+
+@Composable
+fun BottomInfoBar(
+    selectedCount: Int,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 8.dp
+    ) {
+        Text(
+            text = "已选择 $selectedCount 件商品",
+            modifier = Modifier.padding(16.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 @Composable
 fun GoodsList(
     groupedGoods: Map<String, List<Goods>>,
+    categories: List<GoodsCategory>,
+    isBatchDelistMode: Boolean = false,
+    selectedGoodsIds: Set<String> = emptySet(),
+    problemGoodsIds: Set<String> = emptySet(),
+    onGoodsClick: ((Goods) -> Unit)? = null,
+    onGoodsToggleSelection: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -300,7 +527,15 @@ fun GoodsList(
             
             // 分类下的商品
             items(goodsList) { goods ->
-                GoodsCard(goods = goods)
+                GoodsCard(
+                    goods = goods,
+                    categories = categories,
+                    isBatchDelistMode = isBatchDelistMode,
+                    isSelected = selectedGoodsIds.contains(goods.id),
+                    isProblem = problemGoodsIds.contains(goods.id),
+                    onGoodsClick = onGoodsClick,
+                    onToggleSelection = onGoodsToggleSelection
+                )
             }
         }
     }
@@ -339,54 +574,78 @@ fun CategoryHeader(
 @Composable
 fun GoodsCard(
     goods: Goods,
+    categories: List<GoodsCategory>,
+    isBatchDelistMode: Boolean = false,
+    isSelected: Boolean = false,
+    isProblem: Boolean = false,
+    onGoodsClick: ((Goods) -> Unit)? = null,
+    onToggleSelection: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    // 获取分类颜色
+    val categoryColor = remember(goods.category, categories) {
+        categories.find { it.id == goods.category }?.colorHex?.let { colorHex ->
+            try {
+                Color(android.graphics.Color.parseColor(colorHex))
+            } catch (e: IllegalArgumentException) {
+                Color.Blue
+            }
+        } ?: Color.Blue
+    }
+    
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { /* TODO: 点击商品卡片的处理 */ },
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .clickable { 
+                if (isBatchDelistMode) {
+                    onToggleSelection?.invoke(goods.id)
+                } else {
+                    onGoodsClick?.invoke(goods)
+                }
+            },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                isProblem -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                isSelected && isBatchDelistMode -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                else -> MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 商品图片占位符
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = goods.name.take(2),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            // 左侧：复选框（批量模式）或分类颜色竖条
+            if (isBatchDelistMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelection?.invoke(goods.id) }
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .height(40.dp)
+                        .background(
+                            color = categoryColor,
+                            shape = RoundedCornerShape(2.dp)
+                        )
                 )
             }
             
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             
             // 商品信息
             Column(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = goods.name,
+                    text = goods.displayName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = goods.specifications,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -402,7 +661,7 @@ fun GoodsCard(
                     } else {
                         MaterialTheme.colorScheme.primaryContainer
                     },
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
                         text = "库存: ${goods.stockQuantity} 件",
@@ -448,10 +707,13 @@ fun GoodsCardPreview() {
                 id = "1",
                 name = "九牧王单孔冷热龙头",
                 category = "bathroom",
-                specifications = "型号: J-1022",
+                specifications = "J-1022",
                 stockQuantity = 3,
-                lowStockThreshold = 5
-            )
+                lowStockThreshold = 5,
+                purchasePrice = 85.0
+            ),
+            categories = SampleData.categories,
+            onGoodsClick = {}
         )
     }
 }
