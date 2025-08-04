@@ -7,6 +7,7 @@ import com.example.storemanagerassitent.data.GoodsCategory
 import com.example.storemanagerassitent.data.OutboundReason
 import com.example.storemanagerassitent.data.SampleData
 import com.example.storemanagerassitent.data.SortOption
+import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -331,6 +332,9 @@ class GoodsManagementViewModel : ViewModel() {
         
         _showFinalConfirmDialog.value = false
         _outboundQuantity.value = 1
+        
+        // 显示成功提示
+        GlobalSuccessMessage.showSuccess("库存已更正")
     }
     
     // === 批量下架相关方法 ===
@@ -446,7 +450,9 @@ class GoodsManagementViewModel : ViewModel() {
             
             _showBatchDelistConfirmDialog.value = false
             exitBatchDelistMode()
-            // TODO: 显示成功提示
+            
+            // 显示成功提示
+            GlobalSuccessMessage.showSuccess("成功下架 ${selectedIds.size} 件商品")
         }
     }
     
@@ -511,5 +517,8 @@ class GoodsManagementViewModel : ViewModel() {
         
         // 关闭分类选择对话框
         _showCategorySelector.value = false
+        
+        // 显示成功提示
+        GlobalSuccessMessage.showSuccess("分类已更新")
     }
 }

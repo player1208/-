@@ -6,6 +6,7 @@ import com.example.storemanagerassitent.data.Category
 import com.example.storemanagerassitent.data.CategoryDeleteResult
 import com.example.storemanagerassitent.data.CategoryOperationResult
 import com.example.storemanagerassitent.data.CategoryRepository
+import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -116,10 +117,12 @@ class CategoryManagementViewModel : ViewModel() {
             
             when (val result = CategoryRepository.addCategory(_newCategoryName.value.trim())) {
                 is CategoryOperationResult.Success -> {
-                    _message.value = "分类添加成功"
                     _showAddDialog.value = false
                     _newCategoryName.value = ""
                     loadCategories() // 刷新列表
+                    
+                    // 显示成功提示
+                    GlobalSuccessMessage.showSuccess("新分类已添加")
                 }
                 is CategoryOperationResult.Error -> {
                     _message.value = result.message
@@ -166,11 +169,13 @@ class CategoryManagementViewModel : ViewModel() {
             
             when (val result = CategoryRepository.editCategory(category.id, _editCategoryName.value.trim())) {
                 is CategoryOperationResult.Success -> {
-                    _message.value = "分类修改成功"
                     _showEditDialog.value = false
                     _editCategoryName.value = ""
                     _categoryToEdit.value = null
                     loadCategories() // 刷新列表
+                    
+                    // 显示成功提示
+                    GlobalSuccessMessage.showSuccess("分类名称已更新")
                 }
                 is CategoryOperationResult.Error -> {
                     _message.value = result.message
@@ -207,10 +212,12 @@ class CategoryManagementViewModel : ViewModel() {
             
             when (val result = CategoryRepository.deleteCategory(category.id)) {
                 is CategoryDeleteResult.Success -> {
-                    _message.value = "分类删除成功"
                     _showDeleteConfirmDialog.value = false
                     _categoryToDelete.value = null
                     loadCategories() // 刷新列表
+                    
+                    // 显示成功提示
+                    GlobalSuccessMessage.showSuccess("分类已删除")
                 }
                 is CategoryDeleteResult.HasProducts -> {
                     _deleteFailMessage.value = "无法删除该分类，请先将其中的 ${result.productCount} 个商品转移到其他分类下。"

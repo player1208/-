@@ -138,18 +138,6 @@ fun GoodsManagementScreen(
                 )
             }
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { /* TODO: 导航到添加商品页面 */ },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "添加商品",
-                    tint = Color.White
-                )
-            }
-        },
         modifier = modifier
     ) { paddingValues ->
         Column(

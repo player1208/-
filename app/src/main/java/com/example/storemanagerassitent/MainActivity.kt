@@ -13,6 +13,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import com.example.storemanagerassitent.ui.goods.GoodsManagementScreen
 import com.example.storemanagerassitent.ui.home.HomeScreen
 import com.example.storemanagerassitent.ui.profile.ProfileScreen
 import com.example.storemanagerassitent.ui.category.CategoryManagementScreen
+import com.example.storemanagerassitent.ui.components.GlobalSuccessSnackbarHost
 import com.example.storemanagerassitent.ui.theme.StoreManagerAssitentTheme
 
 /**
@@ -69,6 +71,9 @@ fun MainScreen() {
 
     var selectedIndex by remember { mutableIntStateOf(0) }
     var currentScreen by remember { mutableStateOf<AppScreen>(AppScreen.Home) }
+    
+    // 全局成功提示的SnackbarHost状态
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // 处理导航逻辑
     fun navigateToScreen(screen: AppScreen) {
@@ -115,10 +120,18 @@ fun MainScreen() {
                     }
                 }
             }
+        },
+        snackbarHost = {
+            GlobalSuccessSnackbarHost(snackbarHostState = snackbarHostState)
         }
     ) { paddingValues ->
         when (currentScreen) {
-            AppScreen.Home -> HomeScreen()
+            AppScreen.Home -> HomeScreen(
+                onPurchaseOrderClick = {
+                    // TODO: 实现进货开单功能，导航到进货开单页面
+                    // 这里将来可以导航到具体的进货开单页面
+                }
+            )
             AppScreen.Inventory -> GoodsManagementScreen(
                 modifier = Modifier.padding(paddingValues),
                 onNavigateToCategoryManagement = {

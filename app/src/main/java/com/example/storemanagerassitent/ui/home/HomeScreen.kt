@@ -61,7 +61,8 @@ import com.example.storemanagerassitent.data.CategoryOption
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = viewModel()
+    viewModel: HomeViewModel = viewModel(),
+    onPurchaseOrderClick: () -> Unit = {}
 ) {
     val selectedTimePeriod by viewModel.selectedTimePeriod.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -112,7 +113,13 @@ fun HomeScreen(
                         QuickActionCard(
                             action = action,
                             modifier = Modifier.weight(1f),
-                            onMainActionClick = { viewModel.onQuickActionClick(action.id) },
+                            onMainActionClick = { 
+                                if (action.id == "purchase") {
+                                    onPurchaseOrderClick()
+                                } else {
+                                    viewModel.onQuickActionClick(action.id)
+                                }
+                            },
                             onSecondaryActionClick = { viewModel.onSecondaryActionClick(action.id) }
                         )
                     }
