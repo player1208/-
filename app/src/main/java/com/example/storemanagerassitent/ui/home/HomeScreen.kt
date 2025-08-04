@@ -22,10 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,9 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.storemanagerassitent.data.CategorySalesData
+import com.example.storemanagerassitent.data.ProductSalesData
 import com.example.storemanagerassitent.data.QuickAction
 import com.example.storemanagerassitent.data.TimePeriod
+import com.example.storemanagerassitent.data.CategoryOption
 
 /**
  * 首页主界面
@@ -60,8 +64,10 @@ fun HomeScreen(
     viewModel: HomeViewModel = viewModel()
 ) {
     val selectedTimePeriod by viewModel.selectedTimePeriod.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
     val salesInsightData by viewModel.salesInsightData.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val showCategoryDropdown by viewModel.showCategoryDropdown.collectAsState()
     
     Scaffold(
         topBar = {
@@ -115,18 +121,12 @@ fun HomeScreen(
             
             // 销售洞察区标题
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "热销分类排行",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                Text(
+                    text = "热销商品排行",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
             
             // 时间维度切换器
@@ -164,7 +164,19 @@ fun HomeScreen(
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        // 条形图区域
+                        // 分类选择器
+                        CategorySelector(
+                            selectedCategory = salesInsightData.selectedCategory,
+                            categoryOptions = viewModel.categoryOptions,
+                            showDropdown = showCategoryDropdown,
+                            onToggleDropdown = { viewModel.toggleCategoryDropdown() },
+                            onCategorySelected = { viewModel.selectCategory(it.id) },
+                            onDismiss = { viewModel.hideCategoryDropdown() }
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // 商品排名列表
                         if (isLoading) {
                             Box(
                                 modifier = Modifier
@@ -175,8 +187,8 @@ fun HomeScreen(
                                 CircularProgressIndicator()
                             }
                         } else {
-                            SalesBarChart(
-                                data = salesInsightData.categorySales,
+                            ProductRankingList(
+                                products = salesInsightData.productSales,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -252,20 +264,87 @@ fun QuickActionCard(
 }
 
 /**
- * 销售条形图
+ * 分类选择器
  */
 @Composable
-fun SalesBarChart(
-    data: List<CategorySalesData>,
+fun CategorySelector(
+    selectedCategory: CategoryOption,
+    categoryOptions: List<CategoryOption>,
+    showDropdown: Boolean,
+    onToggleDropdown: () -> Unit,
+    onCategorySelected: (CategoryOption) -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (data.isEmpty()) {
+    Box(modifier = modifier) {
+        // 选择器按钮
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleDropdown() },
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = selectedCategory.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = "展开分类选择器",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        // 下拉菜单
+        DropdownMenu(
+            expanded = showDropdown,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            categoryOptions.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option.name,
+                            fontWeight = if (option.id == selectedCategory.id) 
+                                FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = { onCategorySelected(option) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 商品排名列表
+ */
+@Composable
+fun ProductRankingList(
+    products: List<ProductSalesData>,
+    modifier: Modifier = Modifier
+) {
+    if (products.isEmpty()) {
         Box(
             modifier = modifier.height(200.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "暂无数据",
+                text = "该时间段内暂无销售记录",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
@@ -273,16 +352,13 @@ fun SalesBarChart(
         return
     }
     
-    val maxValue = data.maxOfOrNull { it.salesCount } ?: 1
-    
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        data.forEach { categoryData ->
-            CategorySalesBar(
-                categoryData = categoryData,
-                maxValue = maxValue,
+        products.forEach { product ->
+            ProductRankingItem(
+                product = product,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -290,66 +366,79 @@ fun SalesBarChart(
 }
 
 /**
- * 单个分类销售条形
+ * 单个商品排名项
  */
 @Composable
-fun CategorySalesBar(
-    categoryData: CategorySalesData,
-    maxValue: Int,
+fun ProductRankingItem(
+    product: ProductSalesData,
     modifier: Modifier = Modifier
 ) {
-    val progress = categoryData.salesCount.toFloat() / maxValue.toFloat()
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 1000),
-        label = "progress"
-    )
-    
-    Row(
+    Card(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // 分类名称
-        Text(
-            text = categoryData.categoryName,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.width(80.dp),
-            textAlign = TextAlign.End
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
         )
-        
-        // 条形图容器
-        Box(
+    ) {
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .height(24.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 实际条形
+            // 排名
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(animatedProgress)
-                    .height(24.dp)
+                    .size(32.dp)
                     .background(
-                        color = try {
-                            Color(android.graphics.Color.parseColor(categoryData.categoryColor))
-                        } catch (e: IllegalArgumentException) {
-                            MaterialTheme.colorScheme.primary
+                        color = when (product.rank) {
+                            1 -> Color(0xFFFFD700) // 金色
+                            2 -> Color(0xFFC0C0C0) // 银色
+                            3 -> Color(0xFFCD7F32) // 铜色
+                            else -> MaterialTheme.colorScheme.primaryContainer
                         },
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${product.rank}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = when (product.rank) {
+                        1, 2, 3 -> Color.White
+                        else -> MaterialTheme.colorScheme.onPrimaryContainer
+                    }
+                )
+            }
+            
+            // 商品信息
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = product.productName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Text(
+                    text = product.categoryName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+            
+            // 销售数量
+            Text(
+                text = "售出 ${product.salesCount} 件",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
             )
         }
-        
-        // 销售数量
-        Text(
-            text = "${categoryData.salesCount} 件",
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.width(60.dp)
-        )
     }
 }

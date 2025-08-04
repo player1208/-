@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.storemanagerassitent.data.HomeData
 import com.example.storemanagerassitent.data.SalesInsightData
 import com.example.storemanagerassitent.data.TimePeriod
+import com.example.storemanagerassitent.data.CategoryOption
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,9 +20,13 @@ class HomeViewModel : ViewModel() {
     private val _selectedTimePeriod = MutableStateFlow(TimePeriod.WEEK)
     val selectedTimePeriod: StateFlow<TimePeriod> = _selectedTimePeriod.asStateFlow()
     
+    // 当前选中的分类
+    private val _selectedCategory = MutableStateFlow("all")
+    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+    
     // 销售洞察数据
     private val _salesInsightData = MutableStateFlow(
-        HomeData.getSalesInsightData(TimePeriod.WEEK)
+        HomeData.getSalesInsightData(TimePeriod.WEEK, "all")
     )
     val salesInsightData: StateFlow<SalesInsightData> = _salesInsightData.asStateFlow()
     
@@ -29,10 +34,19 @@ class HomeViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     
+    // 分类下拉菜单是否展开
+    private val _showCategoryDropdown = MutableStateFlow(false)
+    val showCategoryDropdown: StateFlow<Boolean> = _showCategoryDropdown.asStateFlow()
+    
     /**
      * 快速操作数据（静态）
      */
     val quickActions = HomeData.quickActions
+    
+    /**
+     * 分类选项列表
+     */
+    val categoryOptions = HomeData.categoryOptions
     
     /**
      * 切换时间维度
@@ -45,9 +59,40 @@ class HomeViewModel : ViewModel() {
             // 模拟数据加载延迟
             kotlinx.coroutines.delay(300)
             
-            _salesInsightData.value = HomeData.getSalesInsightData(period)
+            _salesInsightData.value = HomeData.getSalesInsightData(period, _selectedCategory.value)
             _isLoading.value = false
         }
+    }
+    
+    /**
+     * 切换分类筛选
+     */
+    fun selectCategory(categoryId: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _selectedCategory.value = categoryId
+            _showCategoryDropdown.value = false
+            
+            // 模拟数据加载延迟
+            kotlinx.coroutines.delay(200)
+            
+            _salesInsightData.value = HomeData.getSalesInsightData(_selectedTimePeriod.value, categoryId)
+            _isLoading.value = false
+        }
+    }
+    
+    /**
+     * 切换分类下拉菜单显示状态
+     */
+    fun toggleCategoryDropdown() {
+        _showCategoryDropdown.value = !_showCategoryDropdown.value
+    }
+    
+    /**
+     * 隐藏分类下拉菜单
+     */
+    fun hideCategoryDropdown() {
+        _showCategoryDropdown.value = false
     }
     
     /**
@@ -84,6 +129,14 @@ class HomeViewModel : ViewModel() {
      * 刷新数据
      */
     fun refreshData() {
-        selectTimePeriod(_selectedTimePeriod.value)
+        viewModelScope.launch {
+            _isLoading.value = true
+            
+            // 模拟数据加载延迟
+            kotlinx.coroutines.delay(300)
+            
+            _salesInsightData.value = HomeData.getSalesInsightData(_selectedTimePeriod.value, _selectedCategory.value)
+            _isLoading.value = false
+        }
     }
 }
