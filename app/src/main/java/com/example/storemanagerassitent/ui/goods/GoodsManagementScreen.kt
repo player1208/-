@@ -71,6 +71,7 @@ import com.example.storemanagerassitent.ui.theme.StoreManagerAssitentTheme
 @Composable
 fun GoodsManagementScreen(
     modifier: Modifier = Modifier,
+    onNavigateToCategoryManagement: () -> Unit = {},
     viewModel: GoodsManagementViewModel = viewModel()
 ) {
     // 收集ViewModel中的状态
@@ -132,7 +133,8 @@ fun GoodsManagementScreen(
                     lowStockCount = lowStockCount,
                     showMoreOptionsMenu = showMoreOptionsMenu,
                     onMoreOptionsToggle = viewModel::toggleMoreOptionsMenu,
-                    onBatchDelistClick = viewModel::enterBatchDelistMode
+                    onBatchDelistClick = viewModel::enterBatchDelistMode,
+                    onNavigateToCategoryManagement = onNavigateToCategoryManagement
                 )
             }
         },
@@ -284,6 +286,7 @@ fun GoodsTopAppBar(
     showMoreOptionsMenu: Boolean = false,
     onMoreOptionsToggle: () -> Unit = {},
     onBatchDelistClick: () -> Unit = {},
+    onNavigateToCategoryManagement: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -381,6 +384,15 @@ fun GoodsTopAppBar(
                             ) 
                         },
                         onClick = onBatchDelistClick
+                    )
+                    DropdownMenuItem(
+                        text = { 
+                            Text(
+                                text = "管理分类",
+                                style = MaterialTheme.typography.bodySmall
+                            ) 
+                        },
+                        onClick = onNavigateToCategoryManagement
                     )
                 }
             }
