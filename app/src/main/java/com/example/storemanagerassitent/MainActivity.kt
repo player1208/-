@@ -27,6 +27,7 @@ import com.example.storemanagerassitent.ui.goods.GoodsManagementScreen
 import com.example.storemanagerassitent.ui.home.HomeScreen
 import com.example.storemanagerassitent.ui.profile.ProfileScreen
 import com.example.storemanagerassitent.ui.category.CategoryManagementScreen
+import com.example.storemanagerassitent.ui.sales.SalesOrderScreen
 import com.example.storemanagerassitent.ui.components.GlobalSuccessSnackbarHost
 import com.example.storemanagerassitent.ui.theme.StoreManagerAssitentTheme
 
@@ -47,6 +48,7 @@ sealed class AppScreen {
     object Inventory : AppScreen()
     object Profile : AppScreen()
     object CategoryManagement : AppScreen()
+    object SalesOrder : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -85,6 +87,10 @@ fun MainScreen() {
             AppScreen.CategoryManagement -> {
                 currentScreen = AppScreen.Inventory
             }
+            AppScreen.SalesOrder -> {
+                currentScreen = AppScreen.Home
+                selectedIndex = 0
+            }
             else -> {
                 // 其他页面不处理返回，由底部导航控制
             }
@@ -101,7 +107,7 @@ fun MainScreen() {
     Scaffold(
         bottomBar = {
             // 只在主要页面显示底部导航栏
-            if (currentScreen != AppScreen.CategoryManagement) {
+            if (currentScreen != AppScreen.CategoryManagement && currentScreen != AppScreen.SalesOrder) {
                 NavigationBar {
                     navigationItems.forEachIndexed { index, item ->
                         NavigationBarItem(
@@ -130,6 +136,9 @@ fun MainScreen() {
                 onPurchaseOrderClick = {
                     // TODO: 实现进货开单功能，导航到进货开单页面
                     // 这里将来可以导航到具体的进货开单页面
+                },
+                onSalesOrderClick = {
+                    navigateToScreen(AppScreen.SalesOrder)
                 }
             )
             AppScreen.Inventory -> GoodsManagementScreen(
@@ -140,6 +149,9 @@ fun MainScreen() {
             )
             AppScreen.Profile -> ProfileScreen()
             AppScreen.CategoryManagement -> CategoryManagementScreen(
+                onNavigateBack = { navigateBack() }
+            )
+            AppScreen.SalesOrder -> SalesOrderScreen(
                 onNavigateBack = { navigateBack() }
             )
         }
