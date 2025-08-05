@@ -145,38 +145,67 @@ fun SalesOrderScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 顶部操作栏
-            TopActionBar(
-                onAddProduct = viewModel::showProductSelection,
-                modifier = Modifier.padding(16.dp)
-            )
-            
-            // 订单列表区
-            OrderListArea(
-                items = salesOrderState.items,
-                onRemoveItem = viewModel::removeOrderItem,
-                onUpdateQuantity = viewModel::updateOrderItemQuantity,
-                onEditPrice = viewModel::showPriceEditDialog,
+            // 可滚动的内容区域
+            LazyColumn(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-            )
+                    .fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 顶部操作栏
+                item {
+                    TopActionBar(
+                        onAddProduct = viewModel::showProductSelection,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 0.dp)
+                    )
+                }
+                
+                // 订单列表项
+                if (salesOrderState.items.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "请点击上方按钮添加商品",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    items(salesOrderState.items) { item ->
+                        OrderItemCard(
+                            item = item,
+                            onRemove = { viewModel.removeOrderItem(item.id) },
+                            onUpdateQuantity = { quantity -> viewModel.updateOrderItemQuantity(item.id, quantity) },
+                            onEditPrice = { viewModel.showPriceEditDialog(item) },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
+                
+                // 结算信息区
+                item {
+                    PaymentInfoArea(
+                        salesOrderState = salesOrderState,
+                        onSetPaymentMethod = viewModel::setPaymentMethod,
+                        onSetPaymentType = viewModel::setPaymentType,
+                        onSetDepositAmount = viewModel::setDepositAmount,
+                        onSetCustomerName = viewModel::setCustomerName,
+                        onSetCustomerPhone = viewModel::setCustomerPhone,
+                        onSetCustomerAddress = viewModel::setCustomerAddress,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
             
-            // 结算信息区（限制最大高度，避免过度占用空间）
-            PaymentInfoArea(
-                salesOrderState = salesOrderState,
-                onSetPaymentMethod = viewModel::setPaymentMethod,
-                onSetPaymentType = viewModel::setPaymentType,
-                onSetDepositAmount = viewModel::setDepositAmount,
-                onSetCustomerName = viewModel::setCustomerName,
-                onSetCustomerPhone = viewModel::setCustomerPhone,
-                onSetCustomerAddress = viewModel::setCustomerAddress,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth()
-            )
-            
-            // 底部结算栏
+            // 底部结算栏 - 固定在底部
             BottomSettlementBar(
                 totalAmount = salesOrderState.totalAmount,
                 canComplete = salesOrderState.canCompleteOrder,
@@ -262,51 +291,7 @@ fun TopActionBar(
     }
 }
 
-/**
- * 订单列表区
- */
-@Composable
-fun OrderListArea(
-    items: List<SalesOrderItem>,
-    onRemoveItem: (String) -> Unit,
-    onUpdateQuantity: (String, Int) -> Unit,
-    onEditPrice: (SalesOrderItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (items.isEmpty()) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "请点击上方按钮添加商品",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                textAlign = TextAlign.Center
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = modifier,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 16.dp,
-                bottom = 32.dp  // 增加底部padding，防止被遮挡
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(items) { item ->
-                OrderItemCard(
-                    item = item,
-                    onRemove = { onRemoveItem(item.id) },
-                    onUpdateQuantity = { quantity -> onUpdateQuantity(item.id, quantity) },
-                    onEditPrice = { onEditPrice(item) }
-                )
-            }
-        }
-    }
-}
+
 
 /**
  * 订单项卡片
