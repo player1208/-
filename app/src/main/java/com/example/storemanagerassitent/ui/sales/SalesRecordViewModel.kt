@@ -30,6 +30,10 @@ class SalesRecordViewModel : ViewModel() {
     private val _showDatePicker = MutableStateFlow(false)
     val showDatePicker: StateFlow<Boolean> = _showDatePicker.asStateFlow()
     
+    // 是否显示日历悬浮窗
+    private val _showCalendar = MutableStateFlow(false)
+    val showCalendar: StateFlow<Boolean> = _showCalendar.asStateFlow()
+    
     // 是否显示订单详情
     private val _showOrderDetails = MutableStateFlow(false)
     val showOrderDetails: StateFlow<Boolean> = _showOrderDetails.asStateFlow()
@@ -84,6 +88,20 @@ class SalesRecordViewModel : ViewModel() {
      */
     fun hideDatePicker() {
         _showDatePicker.value = false
+    }
+    
+    /**
+     * 显示日历悬浮窗
+     */
+    fun showCalendar() {
+        _showCalendar.value = true
+    }
+    
+    /**
+     * 隐藏日历悬浮窗
+     */
+    fun hideCalendar() {
+        _showCalendar.value = false
     }
     
     /**

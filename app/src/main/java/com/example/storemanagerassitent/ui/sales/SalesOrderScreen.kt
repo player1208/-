@@ -19,8 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -29,7 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -132,7 +132,7 @@ fun SalesOrderScreen(
                     navigationIcon = {
                         IconButton(onClick = { handleBackPress() }) {
                             Icon(
-                                imageVector = Icons.Filled.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "返回"
                             )
                         }
@@ -157,10 +157,12 @@ fun SalesOrderScreen(
                 onRemoveItem = viewModel::removeOrderItem,
                 onUpdateQuantity = viewModel::updateOrderItemQuantity,
                 onEditPrice = viewModel::showPriceEditDialog,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
             )
             
-            // 结算信息区
+            // 结算信息区（限制最大高度，避免过度占用空间）
             PaymentInfoArea(
                 salesOrderState = salesOrderState,
                 onSetPaymentMethod = viewModel::setPaymentMethod,
@@ -169,7 +171,9 @@ fun SalesOrderScreen(
                 onSetCustomerName = viewModel::setCustomerName,
                 onSetCustomerPhone = viewModel::setCustomerPhone,
                 onSetCustomerAddress = viewModel::setCustomerAddress,
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth()
             )
             
             // 底部结算栏
@@ -274,7 +278,12 @@ fun OrderListArea(
     } else {
         LazyColumn(
             modifier = modifier,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = 32.dp  // 增加底部padding，防止被遮挡
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { item ->
@@ -463,7 +472,7 @@ fun PaymentInfoArea(
                 }
             }
             
-            Divider()
+            HorizontalDivider()
             
             // 付款类型 (Radio Buttons)
             Column {
@@ -504,7 +513,7 @@ fun PaymentInfoArea(
                 }
             }
             
-            Divider()
+            HorizontalDivider()
             
             // 客户信息
             Column {
