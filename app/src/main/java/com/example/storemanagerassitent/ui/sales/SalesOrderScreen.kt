@@ -180,7 +180,11 @@ fun SalesOrderScreen(
             BottomSettlementBar(
                 totalAmount = salesOrderState.totalAmount,
                 canComplete = salesOrderState.canCompleteOrder,
-                onComplete = viewModel::completeOrder,
+                onComplete = {
+                    viewModel.completeOrder {
+                        onNavigateBack() // 完成订单后返回主页
+                    }
+                },
                 modifier = Modifier.padding(16.dp)
             )
         }
@@ -217,6 +221,12 @@ fun SalesOrderScreen(
                 onContinueEdit = { showExitConfirmDialog = false },
                 onDiscardAndExit = {
                     showExitConfirmDialog = false
+                    viewModel.clearOrderData() // 清空订单数据
+                    onNavigateBack()
+                },
+                onSaveAndExit = {
+                    showExitConfirmDialog = false
+                    viewModel.saveOrderAsDraft() // 保存为草稿
                     onNavigateBack()
                 }
             )
@@ -326,9 +336,9 @@ fun OrderItemCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "* ${item.displayName}",
-                        style = MaterialTheme.typography.titleMedium,
+                Text(
+                    text = "* ${item.displayName}",
+                    style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     
@@ -364,7 +374,7 @@ fun OrderItemCard(
                             Text(
                                 text = item.quantity.toString(),
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 8.dp)
                             )
@@ -404,19 +414,19 @@ fun OrderItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 单价（可点击编辑）
-                Text(
-                    text = "单价: ${SalesOrderFormatter.formatCurrency(item.unitPrice)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.clickable { onEditPrice() }
-                )
+                    Text(
+                        text = "单价: ${SalesOrderFormatter.formatCurrency(item.unitPrice)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable { onEditPrice() }
+                    )
                 
                 // 小计
-                Text(
-                    text = "小计: ${SalesOrderFormatter.formatCurrency(item.subtotal)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                    Text(
+                        text = "小计: ${SalesOrderFormatter.formatCurrency(item.subtotal)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
             }
         }
     }
@@ -625,7 +635,8 @@ fun ExitConfirmationDialog(
     orderItemsCount: Int,
     onDismiss: () -> Unit,
     onContinueEdit: () -> Unit,
-    onDiscardAndExit: () -> Unit
+    onDiscardAndExit: () -> Unit,
+    onSaveAndExit: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -637,16 +648,70 @@ fun ExitConfirmationDialog(
             )
         },
         text = {
+            Column {
             Text(
                 text = if (orderItemsCount > 0) {
-                    "您当前订单中有 $orderItemsCount 件商品，退出将丢失所有未保存的数据。"
+                        "您当前订单中有 $orderItemsCount 件商品，请选择退出方式："
                 } else {
                     "确定要退出新建销售单吗？"
                 },
-                style = MaterialTheme.typography.bodyMedium
-            )
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // 三个按钮的布局
+                if (orderItemsCount > 0) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // 保存并退出按钮
+                        Button(
+                            onClick = onSaveAndExit,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                text = "保存并退出",
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        
+                        // 直接退出按钮
+                        Button(
+                            onClick = onDiscardAndExit,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text(
+                                text = "直接退出（清空数据）",
+                                color = Color.White,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        
+                        // 继续编辑按钮
+                        TextButton(
+                            onClick = onContinueEdit,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "继续编辑",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
         },
         confirmButton = {
+            if (orderItemsCount == 0) {
             Button(
                 onClick = onDiscardAndExit,
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
@@ -658,15 +723,24 @@ fun ExitConfirmationDialog(
                     color = Color.White,
                     fontWeight = FontWeight.Medium
                 )
+                }
+            } else {
+                // 有商品时，确认按钮为空，因为按钮在text区域
+                Spacer(modifier = Modifier.size(0.dp))
             }
         },
         dismissButton = {
+            if (orderItemsCount == 0) {
             TextButton(onClick = onContinueEdit) {
                 Text(
-                    text = "继续编辑",
+                        text = "取消",
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
+                }
+            } else {
+                // 有商品时，取消按钮为空，因为按钮在text区域
+                Spacer(modifier = Modifier.size(0.dp))
             }
         }
     )
