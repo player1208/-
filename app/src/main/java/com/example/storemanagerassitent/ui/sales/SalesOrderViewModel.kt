@@ -161,9 +161,18 @@ class SalesOrderViewModel : ViewModel() {
         }
         
         if (existingIndex >= 0) {
-            // 如果商品已存在，更新数量（替换现有记录）
-            currentItems[existingIndex] = orderItem
-            GlobalSuccessMessage.showSuccess("数量已更新")
+            // 如果商品已存在，累加数量而不是替换
+            val existingItem = currentItems[existingIndex]
+            val newQuantity = existingItem.quantity + orderItem.quantity
+            
+            // 检查累加后的数量是否超过库存
+            if (newQuantity > goods.stockQuantity) {
+                GlobalSuccessMessage.showSuccess("库存不足，无法添加更多数量")
+                return
+            }
+            
+            currentItems[existingIndex] = existingItem.copy(quantity = newQuantity)
+            GlobalSuccessMessage.showSuccess("数量已累加至 $newQuantity")
         } else {
             // 如果商品不存在，添加新记录
             currentItems.add(orderItem)
@@ -194,8 +203,10 @@ class SalesOrderViewModel : ViewModel() {
             }
             
             if (existingIndex >= 0) {
-                // 如果商品已存在，更新数量（替换现有记录）
-                currentItems[existingIndex] = newItem
+                // 如果商品已存在，累加数量而不是替换
+                val existingItem = currentItems[existingIndex]
+                val newQuantity = existingItem.quantity + newItem.quantity
+                currentItems[existingIndex] = existingItem.copy(quantity = newQuantity)
             } else {
                 // 如果商品不存在，添加新记录
                 currentItems.add(newItem)
@@ -229,8 +240,10 @@ class SalesOrderViewModel : ViewModel() {
             }
             
             if (existingIndex >= 0) {
-                // 如果商品已存在，更新数量（替换现有记录）
-                currentItems[existingIndex] = newItem
+                // 如果商品已存在，累加数量而不是替换
+                val existingItem = currentItems[existingIndex]
+                val newQuantity = existingItem.quantity + newItem.quantity
+                currentItems[existingIndex] = existingItem.copy(quantity = newQuantity)
             } else {
                 // 如果商品不存在，添加新记录
                 currentItems.add(newItem)
@@ -441,8 +454,10 @@ class SalesOrderViewModel : ViewModel() {
         }
         
         if (existingIndex >= 0) {
-            // 如果商品已存在，更新数量（替换现有记录）
-            currentCartItems[existingIndex] = item
+            // 如果商品已存在，累加数量而不是替换
+            val existingItem = currentCartItems[existingIndex]
+            val newQuantity = existingItem.quantity + item.quantity
+            currentCartItems[existingIndex] = existingItem.copy(quantity = newQuantity)
         } else {
             // 如果商品不存在，添加新记录
             currentCartItems.add(item)
@@ -467,8 +482,10 @@ class SalesOrderViewModel : ViewModel() {
             }
             
             if (existingIndex >= 0) {
-                // 如果商品已存在，更新数量（替换现有记录）
-                currentCartItems[existingIndex] = newItem
+                // 如果商品已存在，累加数量而不是替换
+                val existingItem = currentCartItems[existingIndex]
+                val newQuantity = existingItem.quantity + newItem.quantity
+                currentCartItems[existingIndex] = existingItem.copy(quantity = newQuantity)
             } else {
                 // 如果商品不存在，添加新记录
                 currentCartItems.add(newItem)

@@ -631,11 +631,19 @@ fun ProductCard(
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isOutOfStock = goods.stockQuantity <= 0
+    
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isOutOfStock) 
+                Color(0xFFFFEBEE) // 浅红色背景表示缺货
+            else 
+                MaterialTheme.colorScheme.surface
+        )
     ) {
         Row(
             modifier = Modifier
@@ -643,13 +651,13 @@ fun ProductCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 分类颜色条
+            // 分类颜色条 - 缺货时显示红色
             Box(
                 modifier = Modifier
                     .width(4.dp)
                     .height(48.dp)
                     .background(
-                        color = Color(0xFF007BFF),
+                        color = if (isOutOfStock) Color.Red else Color(0xFF007BFF),
                         shape = RoundedCornerShape(2.dp)
                     )
             )
@@ -661,34 +669,67 @@ fun ProductCard(
                 Text(
                     text = goods.displayName,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    color = if (isOutOfStock) 
+                        Color(0xFF616161) // 灰色文字表示不可用
+                    else 
+                        MaterialTheme.colorScheme.onSurface
                 )
+                
+                // 库存信息 - 缺货时红色标出
                 Text(
-                    text = "库存: ${goods.stockQuantity} 件",
+                    text = if (isOutOfStock) "库存: 0 件 (缺货)" else "库存: ${goods.stockQuantity} 件",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = if (isOutOfStock) Color.Red else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    fontWeight = if (isOutOfStock) FontWeight.Bold else FontWeight.Normal
                 )
+                
                 Text(
                     text = "单价: ${SalesOrderFormatter.formatCurrency(goods.retailPrice)}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = if (isOutOfStock) 
+                        Color(0xFF616161) // 灰色价格
+                    else 
+                        MaterialTheme.colorScheme.primary
                 )
             }
             
-            // 添加按钮
+            // 添加按钮 - 缺货时禁用
             IconButton(
-                onClick = onAddClick,
+                onClick = { if (!isOutOfStock) onAddClick() }, // 缺货时禁用点击
+                enabled = !isOutOfStock, // 缺货时禁用按钮
                 modifier = Modifier
                     .size(40.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (isOutOfStock) 
+                            Color(0xFFBDBDBD) // 灰色表示禁用
+                        else 
+                            MaterialTheme.colorScheme.primary,
                         shape = CircleShape
                     )
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
-                    contentDescription = "添加商品",
-                    tint = Color.White
+                    contentDescription = if (isOutOfStock) "缺货，无法添加" else "添加商品",
+                    tint = if (isOutOfStock) Color.White.copy(alpha = 0.6f) else Color.White
+                )
+            }
+        }
+        
+        // 缺货提示条
+        if (isOutOfStock) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Red)
+                    .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "商品缺货，暂时无法选择",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
