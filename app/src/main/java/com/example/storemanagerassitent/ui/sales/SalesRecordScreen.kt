@@ -66,6 +66,7 @@ fun SalesRecordScreen(
     val dateFilterState by viewModel.dateFilterState.collectAsState()
     val salesRecords by viewModel.salesRecords.collectAsState()
     val showDatePicker by viewModel.showDatePicker.collectAsState()
+    val showCalendar by viewModel.showCalendar.collectAsState()
     val showOrderDetails by viewModel.showOrderDetails.collectAsState()
     val selectedOrder by viewModel.selectedOrder.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -152,7 +153,16 @@ fun SalesRecordScreen(
                 onSelectPreset = viewModel::selectPresetDateFilter,
                 onSelectCustomDate = viewModel::selectCustomDate,
                 onSelectCustomMonth = viewModel::selectCustomMonth,
-                onSelectCustomYear = viewModel::selectCustomYear
+                onSelectCustomYear = viewModel::selectCustomYear,
+                onShowCalendar = viewModel::showCalendar
+            )
+        }
+        
+        // 日历悬浮窗
+        if (showCalendar) {
+            CalendarBottomSheet(
+                onDismiss = viewModel::hideCalendar,
+                onDateSelected = viewModel::selectCustomDate
             )
         }
         
@@ -334,7 +344,8 @@ fun DatePickerDialog(
     onSelectPreset: (DateFilterType) -> Unit,
     onSelectCustomDate: (java.util.Date) -> Unit,
     onSelectCustomMonth: (Int, Int) -> Unit,
-    onSelectCustomYear: (Int) -> Unit
+    onSelectCustomYear: (Int) -> Unit,
+    onShowCalendar: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -369,15 +380,21 @@ fun DatePickerDialog(
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 
-                Text(
-                    text = "自定义范围",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                
-                // 这里可以添加更多自定义日期选择选项
-                // 为了简化，暂时只提供预设选项
+                TextButton(
+                    onClick = { 
+                        onDismiss()
+                        onShowCalendar()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "自定义范围",
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         confirmButton = {},
