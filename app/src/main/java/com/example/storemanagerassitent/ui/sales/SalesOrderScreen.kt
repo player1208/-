@@ -48,6 +48,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,10 +83,27 @@ fun SalesOrderScreen(
     val showPriceEditDialog by viewModel.showPriceEditDialog.collectAsState()
     val editingOrderItem by viewModel.editingOrderItem.collectAsState()
     val priceEditAmount by viewModel.priceEditAmount.collectAsState()
+    val cartItems by viewModel.cartItems.collectAsState()
+    
+    // 智能返回确认对话框状态
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
     
     // 页面进入时重置UI状态
     LaunchedEffect(Unit) {
         viewModel.resetUIStates()
+    }
+    
+    // 智能返回逻辑
+    fun handleBackPress() {
+        val hasOrderItems = salesOrderState.items.isNotEmpty()
+        
+        if (hasOrderItems) {
+            // 有商品时显示确认对话框
+            showExitConfirmDialog = true
+        } else {
+            // 无商品时直接返回
+            onNavigateBack()
+        }
     }
     
     // 商品选择界面作为全屏覆盖
@@ -92,7 +112,11 @@ fun SalesOrderScreen(
             onDismiss = viewModel::hideProductSelection,
             onSelectProduct = viewModel::selectProduct,
             onAddConfirmedItems = viewModel::addConfirmedItems,
-            getAllGoods = viewModel::getAllGoods
+            getAllGoods = viewModel::getAllGoods,
+            cartItems = cartItems,
+            onAddToCart = viewModel::addToCart,
+            onRemoveFromCart = viewModel::removeFromCart,
+            onClearCart = viewModel::clearCart
         )
     } else {
         Scaffold(
@@ -106,7 +130,7 @@ fun SalesOrderScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
+                        IconButton(onClick = { handleBackPress() }) {
                             Icon(
                                 imageVector = Icons.Filled.ArrowBack,
                                 contentDescription = "返回"
@@ -178,6 +202,19 @@ fun SalesOrderScreen(
                 onPriceChange = viewModel::updatePriceEditAmount,
                 onConfirm = viewModel::confirmPriceEdit,
                 onDismiss = viewModel::hidePriceEditDialog
+            )
+        }
+        
+        // 智能退出确认对话框
+        if (showExitConfirmDialog) {
+            ExitConfirmationDialog(
+                orderItemsCount = salesOrderState.items.size,
+                onDismiss = { showExitConfirmDialog = false },
+                onContinueEdit = { showExitConfirmDialog = false },
+                onDiscardAndExit = {
+                    showExitConfirmDialog = false
+                    onNavigateBack()
+                }
             )
         }
         }
@@ -273,18 +310,69 @@ fun OrderItemCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // 商品名称和删除按钮
+            // 商品名称、数量和删除按钮
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    text = "* ${item.displayName}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "* ${item.displayName}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    // 在商品名称下方显示数量信息
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Text(
+                            text = "数量: ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        
+                        // 简洁的数量调节器
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            IconButton(
+                                onClick = { if (item.quantity > 1) onUpdateQuantity(item.quantity - 1) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Text(
+                                    text = "−",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            
+                            Text(
+                                text = item.quantity.toString(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            
+                            IconButton(
+                                onClick = { onUpdateQuantity(item.quantity + 1) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Text(
+                                    text = "+",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 IconButton(
                     onClick = onRemove,
@@ -300,73 +388,26 @@ fun OrderItemCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // 价格和数量行
+            // 价格信息行
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 左侧：价格
-                Column {
-                    Text(
-                        text = "单价: ${SalesOrderFormatter.formatCurrency(item.unitPrice)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.clickable { onEditPrice() }
-                    )
-                    Text(
-                        text = "小计: ${SalesOrderFormatter.formatCurrency(item.subtotal)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // 单价（可点击编辑）
+                Text(
+                    text = "单价: ${SalesOrderFormatter.formatCurrency(item.unitPrice)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.clickable { onEditPrice() }
+                )
                 
-                // 右侧：数量调节器
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "* 数量: ",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    
-                    // 数量调节器
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        IconButton(
-                            onClick = { if (item.quantity > 1) onUpdateQuantity(item.quantity - 1) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Text(
-                                text = "−",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        
-                        Text(
-                            text = item.quantity.toString(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 12.dp)
-                        )
-                        
-                        IconButton(
-                            onClick = { onUpdateQuantity(item.quantity + 1) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Text(
-                                text = "+",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                // 小计
+                Text(
+                    text = "小计: ${SalesOrderFormatter.formatCurrency(item.subtotal)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -427,7 +468,7 @@ fun PaymentInfoArea(
             // 付款类型 (Radio Buttons)
             Column {
                 Text(
-                    text = "付款类型",
+                    text = "* 付款类型",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
@@ -565,4 +606,59 @@ fun BottomSettlementBar(
             }
         }
     }
+}
+
+/**
+ * 退出确认对话框
+ */
+@Composable
+fun ExitConfirmationDialog(
+    orderItemsCount: Int,
+    onDismiss: () -> Unit,
+    onContinueEdit: () -> Unit,
+    onDiscardAndExit: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "确认退出？",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = if (orderItemsCount > 0) {
+                    "您当前订单中有 $orderItemsCount 件商品，退出将丢失所有未保存的数据。"
+                } else {
+                    "确定要退出新建销售单吗？"
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onDiscardAndExit,
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text(
+                    text = "确认退出",
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onContinueEdit) {
+                Text(
+                    text = "继续编辑",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    )
 } 

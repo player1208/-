@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
@@ -63,6 +65,7 @@ import com.example.storemanagerassitent.data.Goods
 import com.example.storemanagerassitent.data.SalesOrderFormatter
 import com.example.storemanagerassitent.data.SalesOrderItem
 import com.example.storemanagerassitent.data.SampleData
+import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -70,16 +73,21 @@ fun InventoryStyleProductSelectionScreen(
     onDismiss: () -> Unit,
     onSelectProduct: (Goods) -> Unit,
     onAddConfirmedItems: (List<SalesOrderItem>) -> Unit,
-    getAllGoods: () -> List<Goods>
+    getAllGoods: () -> List<Goods>,
+    cartItems: List<SalesOrderItem>,
+    onAddToCart: (SalesOrderItem) -> Unit,
+    onRemoveFromCart: (String) -> Unit,
+    onClearCart: () -> Unit
 ) {
     val goods = getAllGoods()
     val categories = SampleData.categories
     var selectedCategory by remember { mutableStateOf("all") }
     var searchText by remember { mutableStateOf("") }
-    var pendingItems by remember { mutableStateOf<List<SalesOrderItem>>(emptyList()) }
+    // 使用ViewModel的购物车状态，不再使用本地pendingItems
     var showQuantityDialog by remember { mutableStateOf(false) }
     var selectedGoods by remember { mutableStateOf<Goods?>(null) }
     var quantityAmount by remember { mutableStateOf(1) }
+    var isUpdatingExistingItem by remember { mutableStateOf(false) } // 标识是否是更新现有商品
     var showPendingListDialog by remember { mutableStateOf(false) }
     var showExitConfirmDialog by remember { mutableStateOf(false) }
     
@@ -116,7 +124,7 @@ fun InventoryStyleProductSelectionScreen(
                         IconButton(
                             onClick = {
                                 // 智能退出确认逻辑
-                                if (pendingItems.isNotEmpty()) {
+                                if (cartItems.isNotEmpty()) {
                                     // 有待确认商品，显示确认对话框
                                     showExitConfirmDialog = true
                                 } else {
@@ -249,7 +257,17 @@ fun InventoryStyleProductSelectionScreen(
                                         goods = goods,
                                         onAddClick = {
                                             selectedGoods = goods
-                                            quantityAmount = 1
+                                            // 智能判断商品是否已在购物车中
+                                            val existingItem = cartItems.find { it.goodsId == goods.id }
+                                            if (existingItem != null) {
+                                                // 商品已存在，显示"继续增加数量"对话框
+                                                quantityAmount = existingItem.quantity
+                                                isUpdatingExistingItem = true
+                                            } else {
+                                                // 商品不存在，显示"添加商品"对话框
+                                                quantityAmount = 1
+                                                isUpdatingExistingItem = false
+                                            }
                                             showQuantityDialog = true
                                         }
                                     )
@@ -265,7 +283,17 @@ fun InventoryStyleProductSelectionScreen(
                                     goods = goods,
                                     onAddClick = {
                                         selectedGoods = goods
-                                        quantityAmount = 1
+                                        // 智能判断商品是否已在购物车中
+                                        val existingItem = cartItems.find { it.goodsId == goods.id }
+                                        if (existingItem != null) {
+                                            // 商品已存在，显示"继续增加数量"对话框
+                                            quantityAmount = existingItem.quantity
+                                            isUpdatingExistingItem = true
+                                        } else {
+                                            // 商品不存在，显示"添加商品"对话框
+                                            quantityAmount = 1
+                                            isUpdatingExistingItem = false
+                                        }
                                         showQuantityDialog = true
                                     }
                                 )
@@ -283,7 +311,7 @@ fun InventoryStyleProductSelectionScreen(
         
         // 悬浮购物车 - 固定在屏幕最左侧，紧贴合计金额灰框
         LeftAlignedShoppingCart(
-            itemCount = pendingItems.size, // 显示真实的商品数量
+            itemCount = cartItems.size, // 显示真实的商品数量
             onCartClick = { showPendingListDialog = true }
         )
         
@@ -296,7 +324,7 @@ fun InventoryStyleProductSelectionScreen(
                 },
                 title = {
                     Text(
-                        text = "添加商品",
+                        text = if (isUpdatingExistingItem) "继续增加数量" else "添加商品",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -357,7 +385,7 @@ fun InventoryStyleProductSelectionScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            // 添加到待确认清单
+                            // 添加/更新商品到购物车（addToCart方法已自动处理重复项）
                             val newItem = SalesOrderItem(
                                 goodsId = selectedGoods!!.id,
                                 goodsName = selectedGoods!!.name,
@@ -367,7 +395,12 @@ fun InventoryStyleProductSelectionScreen(
                                 category = selectedGoods!!.category
                             )
                             
-                            pendingItems = pendingItems + newItem
+                            onAddToCart(newItem)
+                            
+                            // 显示相应的成功提示
+                            GlobalSuccessMessage.showSuccess(
+                                if (isUpdatingExistingItem) "✓ 数量已更新" else "✓ 添加成功"
+                            )
                             
                             // 关闭对话框
                             showQuantityDialog = false
@@ -375,7 +408,7 @@ fun InventoryStyleProductSelectionScreen(
                         },
                         enabled = quantityAmount > 0 && quantityAmount <= selectedGoods!!.stockQuantity
                     ) {
-                        Text("确认添加")
+                        Text(if (isUpdatingExistingItem) "更新数量" else "确认添加")
                     }
                 },
                 dismissButton = {
@@ -395,53 +428,42 @@ fun InventoryStyleProductSelectionScreen(
                 onDismissRequest = { showPendingListDialog = false },
                 title = {
                     Text(
-                        text = "已选商品 (${pendingItems.size})",
+                        text = "已选商品 (${cartItems.size})",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                 },
                 text = {
-                    if (pendingItems.isEmpty()) {
+                    if (cartItems.isEmpty()) {
                         Text("暂无商品，请先添加商品")
                     } else {
                         LazyColumn(
                             modifier = Modifier.height(300.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(pendingItems) { item ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = item.displayName,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            text = "数量: ${item.quantity} | 单价: ${SalesOrderFormatter.formatCurrency(item.unitPrice)}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                    TextButton(onClick = { 
-                                        pendingItems = pendingItems.filter { it.id != item.id }
-                                    }) {
-                                        Text("删除", color = Color.Red)
-                                    }
-                                }
+                            items(cartItems) { item ->
+                                CartItemRow(
+                                    item = item,
+                                    onQuantityChange = { newQuantity ->
+                                        if (newQuantity > 0) {
+                                            // 更新数量（addToCart方法已自动处理重复项）
+                                            val updatedItem = item.copy(quantity = newQuantity)
+                                            onAddToCart(updatedItem)
+                                        }
+                                    },
+                                    onRemove = { onRemoveFromCart(item.id) },
+                                    maxQuantity = getAllGoods().find { it.id == item.goodsId }?.stockQuantity ?: 99
+                                )
                             }
                         }
                     }
                 },
                 confirmButton = {
-                    if (pendingItems.isNotEmpty()) {
+                    if (cartItems.isNotEmpty()) {
                         Button(
                             onClick = {
-                                onAddConfirmedItems(pendingItems)
+                                onAddConfirmedItems(cartItems)
+                                onClearCart() // 确认添加后清空购物车
                                 showPendingListDialog = false
                             },
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
@@ -449,7 +471,7 @@ fun InventoryStyleProductSelectionScreen(
                             )
                         ) {
                             Text(
-                                text = "完成添加 (${pendingItems.size})",
+                                text = "完成添加 (${cartItems.size})",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
@@ -467,10 +489,11 @@ fun InventoryStyleProductSelectionScreen(
         // 退出确认对话框
         if (showExitConfirmDialog) {
             ExitConfirmDialog(
-                selectedCount = pendingItems.size,
+                selectedCount = cartItems.size,
                 onDismiss = { showExitConfirmDialog = false },
                 onDiscardChanges = { 
                     showExitConfirmDialog = false
+                    onClearCart() // 放弃选择时清空购物车
                     onDismiss() // 直接返回，不保存
                 },
                 onContinueSelection = { 
@@ -478,7 +501,9 @@ fun InventoryStyleProductSelectionScreen(
                 },
                 onSaveAndReturn = {
                     showExitConfirmDialog = false
-                    onAddConfirmedItems(pendingItems) // 保存并返回
+                    // 保存到购物车中，不直接添加到订单
+                    // 购物车状态会保持，用户稍后可以查看并决定是否添加
+                    onDismiss() // 直接返回，商品保留在购物车中
                 }
             )
         }
@@ -667,5 +692,240 @@ fun ProductCard(
                 )
             }
         }
+    }
+}
+
+/**
+ * 购物车商品项组件 - 支持数量调节
+ */
+@Composable
+fun CartItemRow(
+    item: SalesOrderItem,
+    onQuantityChange: (Int) -> Unit,
+    onRemove: () -> Unit,
+    maxQuantity: Int,
+    modifier: Modifier = Modifier
+) {
+    var showRemoveConfirmDialog by remember { mutableStateOf(false) }
+    var showQuantityInputDialog by remember { mutableStateOf(false) }
+    
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // 商品名称和单价
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "单价: ${SalesOrderFormatter.formatCurrency(item.unitPrice)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+                
+                // 删除按钮
+                TextButton(
+                    onClick = { showRemoveConfirmDialog = true }
+                ) {
+                    Text("删除", color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // 数量调节器和小计
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 数量调节器
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "数量:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    
+                    // 减少按钮
+                    IconButton(
+                        onClick = {
+                            if (item.quantity > 1) {
+                                onQuantityChange(item.quantity - 1)
+                            } else {
+                                // 数量为1时点击减号，显示删除确认
+                                showRemoveConfirmDialog = true
+                            }
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (item.quantity > 1) Icons.Filled.KeyboardArrowDown else Icons.Filled.Delete,
+                            contentDescription = if (item.quantity > 1) "减少数量" else "删除商品",
+                            tint = if (item.quantity > 1) MaterialTheme.colorScheme.primary else Color.Red,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    
+                    // 数量显示 - 可点击进行精确输入
+                    Surface(
+                        onClick = { showQuantityInputDialog = true },
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.clickable { showQuantityInputDialog = true }
+                    ) {
+                        Text(
+                            text = item.quantity.toString(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    
+                    // 增加按钮
+                    IconButton(
+                        onClick = {
+                            if (item.quantity < maxQuantity) {
+                                onQuantityChange(item.quantity + 1)
+                            }
+                        },
+                        enabled = item.quantity < maxQuantity,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "增加数量",
+                            tint = if (item.quantity < maxQuantity) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                
+                // 小计
+                Text(
+                    text = SalesOrderFormatter.formatCurrency(item.subtotal),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+    
+    // 删除确认对话框
+    if (showRemoveConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveConfirmDialog = false },
+            title = {
+                Text(
+                    text = "确认删除",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text("是否要从清单中移除该商品？\n\n${item.displayName}")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRemove()
+                        showRemoveConfirmDialog = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = Color.Red
+                    )
+                ) {
+                    Text("删除", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveConfirmDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+    
+    // 数量精确输入对话框
+    if (showQuantityInputDialog) {
+        var inputQuantity by remember { mutableStateOf(item.quantity.toString()) }
+        
+        AlertDialog(
+            onDismissRequest = { showQuantityInputDialog = false },
+            title = {
+                Text(
+                    text = "输入数量",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = item.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "库存: $maxQuantity 件",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = inputQuantity,
+                        onValueChange = { inputQuantity = it.filter { char -> char.isDigit() } },
+                        label = { Text("数量") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newQuantity = inputQuantity.toIntOrNull()
+                        if (newQuantity != null && newQuantity > 0 && newQuantity <= maxQuantity) {
+                            onQuantityChange(newQuantity)
+                            showQuantityInputDialog = false
+                        }
+                    },
+                    enabled = {
+                        val quantity = inputQuantity.toIntOrNull()
+                        quantity != null && quantity > 0 && quantity <= maxQuantity
+                    }()
+                ) {
+                    Text("确认")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showQuantityInputDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }

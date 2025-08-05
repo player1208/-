@@ -63,7 +63,8 @@ import com.example.storemanagerassitent.data.CategoryOption
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
     onPurchaseOrderClick: () -> Unit = {},
-    onSalesOrderClick: () -> Unit = {}
+    onSalesOrderClick: () -> Unit = {},
+    onSalesRecordClick: () -> Unit = {}
 ) {
     val selectedTimePeriod by viewModel.selectedTimePeriod.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -121,7 +122,12 @@ fun HomeScreen(
                                     else -> viewModel.onQuickActionClick(action.id)
                                 }
                             },
-                            onSecondaryActionClick = { viewModel.onSecondaryActionClick(action.id) }
+                            onSecondaryActionClick = { 
+                                when (action.id) {
+                                    "sales" -> onSalesRecordClick()
+                                    else -> viewModel.onSecondaryActionClick(action.id)
+                                }
+                            }
                         )
                     }
                 }
