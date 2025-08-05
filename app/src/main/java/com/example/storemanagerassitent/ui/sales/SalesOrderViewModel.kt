@@ -395,7 +395,7 @@ class SalesOrderViewModel : ViewModel() {
     /**
      * 完成订单
      */
-    fun completeOrder() {
+    fun completeOrder(onComplete: (() -> Unit)? = null) {
         val state = _salesOrderState.value
         if (!state.canCompleteOrder) return
         
@@ -422,6 +422,9 @@ class SalesOrderViewModel : ViewModel() {
             
             // 重置整个订单，准备下一个订单
             resetOrder()
+            
+            // 执行完成回调
+            onComplete?.invoke()
         }
     }
     
@@ -522,5 +525,26 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun getAllGoods(): List<Goods> {
         return SampleData.goods.filter { !it.isDelisted }
+    }
+    
+    /**
+     * 保存订单为草稿
+     */
+    fun saveOrderAsDraft() {
+        // TODO: 这里可以实现草稿保存逻辑，比如保存到本地存储
+        // 目前只是显示成功提示
+        if (_salesOrderState.value.items.isNotEmpty()) {
+            GlobalSuccessMessage.showSuccess("订单已保存为草稿")
+            // 保存后重置订单状态
+            resetOrder()
+        }
+    }
+    
+    /**
+     * 清空订单数据
+     */
+    fun clearOrderData() {
+        resetOrder()
+        GlobalSuccessMessage.showSuccess("订单数据已清空")
     }
 } 

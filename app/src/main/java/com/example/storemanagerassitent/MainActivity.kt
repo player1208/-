@@ -93,6 +93,10 @@ fun MainScreen() {
                 currentScreen = AppScreen.Home
                 selectedIndex = 0
             }
+            AppScreen.SalesRecord -> {
+                currentScreen = AppScreen.Home
+                selectedIndex = 0
+            }
             else -> {
                 // 其他页面不处理返回，由底部导航控制
             }
@@ -109,7 +113,9 @@ fun MainScreen() {
     Scaffold(
         bottomBar = {
             // 只在主要页面显示底部导航栏
-            if (currentScreen != AppScreen.CategoryManagement && currentScreen != AppScreen.SalesOrder) {
+            if (currentScreen != AppScreen.CategoryManagement && 
+                currentScreen != AppScreen.SalesOrder && 
+                currentScreen != AppScreen.SalesRecord) {
                 NavigationBar {
                     navigationItems.forEachIndexed { index, item ->
                         NavigationBarItem(
