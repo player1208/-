@@ -9,6 +9,7 @@ import com.example.storemanagerassitent.data.SalesOrder
 import com.example.storemanagerassitent.data.SalesOrderItem
 import com.example.storemanagerassitent.data.SalesOrderState
 import com.example.storemanagerassitent.data.SampleData
+import com.example.storemanagerassitent.data.SalesRecordData
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,14 @@ class SalesOrderViewModel : ViewModel() {
     private val _priceEditAmount = MutableStateFlow(0.0)
     val priceEditAmount: StateFlow<Double> = _priceEditAmount.asStateFlow()
     
+    // 购物车状态 - 保存用户选择但未确认添加到订单的商品
+    private val _cartItems = MutableStateFlow<List<SalesOrderItem>>(emptyList())
+    val cartItems: StateFlow<List<SalesOrderItem>> = _cartItems.asStateFlow()
+    
+    // 是否显示购物车对话框
+    private val _showCartDialog = MutableStateFlow(false)
+    val showCartDialog: StateFlow<Boolean> = _showCartDialog.asStateFlow()
+    
     /**
      * 显示商品选择界面
      */
@@ -84,6 +93,7 @@ class SalesOrderViewModel : ViewModel() {
         _showPriceEditDialog.value = false
         _editingOrderItem.value = null
         _priceEditAmount.value = 0.0
+        _showCartDialog.value = false
     }
     
     /**
@@ -91,20 +101,36 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun resetOrder() {
         _salesOrderState.value = SalesOrderState()
+        _cartItems.value = emptyList() // 完成订单后清空购物车
         resetUIStates()
     }
     
     /**
      * 选择商品
+     * 如果商品已在订单中，显示当前数量
      */
     fun selectProduct(goods: Goods) {
         _selectedGoods.value = goods
-        _quantityDialogAmount.value = 1
+        
+        // 检查商品是否已在订单中
+        val existingItem = _salesOrderState.value.items.find { 
+            it.goodsId == goods.id && it.unitPrice == goods.retailPrice 
+        }
+        
+        if (existingItem != null) {
+            // 如果商品已存在，显示当前数量
+            _quantityDialogAmount.value = existingItem.quantity
+        } else {
+            // 如果商品不存在，默认数量为1
+            _quantityDialogAmount.value = 1
+        }
+        
         _showQuantityDialog.value = true
     }
     
     /**
      * 确认商品数量
+     * 如果商品已存在，则更新数量而不是添加重复项
      */
     fun confirmProductQuantity() {
         val goods = _selectedGoods.value ?: return
@@ -121,33 +147,61 @@ class SalesOrderViewModel : ViewModel() {
             goodsId = goods.id,
             goodsName = goods.name,
             specifications = goods.specifications,
-            unitPrice = goods.purchasePrice, // 使用进货价作为默认售价
+            unitPrice = goods.retailPrice, // 使用零售价
             quantity = quantity,
             category = goods.category
         )
         
-        // 添加到订单
+        // 添加到订单，处理重复商品
         val currentItems = _salesOrderState.value.items.toMutableList()
-        currentItems.add(orderItem)
+        
+        // 查找是否已存在相同商品（通过goodsId和unitPrice判断）
+        val existingIndex = currentItems.indexOfFirst { 
+            it.goodsId == orderItem.goodsId && it.unitPrice == orderItem.unitPrice 
+        }
+        
+        if (existingIndex >= 0) {
+            // 如果商品已存在，更新数量（替换现有记录）
+            currentItems[existingIndex] = orderItem
+            GlobalSuccessMessage.showSuccess("数量已更新")
+        } else {
+            // 如果商品不存在，添加新记录
+            currentItems.add(orderItem)
+            GlobalSuccessMessage.showSuccess("添加成功")
+        }
+        
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
         
         // 关闭对话框
         _showQuantityDialog.value = false
         _selectedGoods.value = null
-        
-        // 显示成功提示
-        GlobalSuccessMessage.showSuccess("添加成功")
     }
     
     /**
      * 批量添加商品到订单
+     * 如果商品已存在，则更新数量而不是添加重复项
      */
     fun addMultipleItems(items: List<SalesOrderItem>) {
         if (items.isEmpty()) return
         
-        // 添加所有商品到订单
         val currentItems = _salesOrderState.value.items.toMutableList()
-        currentItems.addAll(items)
+        
+        // 处理每个要添加的商品
+        items.forEach { newItem ->
+            // 查找是否已存在相同商品（通过goodsId和unitPrice判断）
+            val existingIndex = currentItems.indexOfFirst { 
+                it.goodsId == newItem.goodsId && it.unitPrice == newItem.unitPrice 
+            }
+            
+            if (existingIndex >= 0) {
+                // 如果商品已存在，更新数量（替换现有记录）
+                currentItems[existingIndex] = newItem
+            } else {
+                // 如果商品不存在，添加新记录
+                currentItems.add(newItem)
+            }
+        }
+        
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
         
         // 关闭商品选择界面
@@ -160,13 +214,29 @@ class SalesOrderViewModel : ViewModel() {
     
     /**
      * 直接批量添加已确认的商品项（无需再次确认）
+     * 如果商品已存在，则更新数量而不是添加重复项
      */
     fun addConfirmedItems(items: List<SalesOrderItem>) {
         if (items.isEmpty()) return
         
-        // 添加所有商品到订单
         val currentItems = _salesOrderState.value.items.toMutableList()
-        currentItems.addAll(items)
+        
+        // 处理每个要添加的商品
+        items.forEach { newItem ->
+            // 查找是否已存在相同商品（通过goodsId和unitPrice判断）
+            val existingIndex = currentItems.indexOfFirst { 
+                it.goodsId == newItem.goodsId && it.unitPrice == newItem.unitPrice 
+            }
+            
+            if (existingIndex >= 0) {
+                // 如果商品已存在，更新数量（替换现有记录）
+                currentItems[existingIndex] = newItem
+            } else {
+                // 如果商品不存在，添加新记录
+                currentItems.add(newItem)
+            }
+        }
+        
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
         
         // 关闭商品选择界面
@@ -342,7 +412,9 @@ class SalesOrderViewModel : ViewModel() {
                 totalAmount = state.totalAmount
             )
             
-            // TODO: 保存订单到数据库
+            // 保存订单到销售记录
+            SalesRecordData.addSalesRecord(order)
+            
             // TODO: 更新库存
             
             // 显示成功提示
@@ -351,6 +423,98 @@ class SalesOrderViewModel : ViewModel() {
             // 重置整个订单，准备下一个订单
             resetOrder()
         }
+    }
+    
+    /**
+     * 添加商品到购物车
+     * 如果商品已存在，则更新数量而不是添加重复项
+     */
+    fun addToCart(item: SalesOrderItem) {
+        val currentCartItems = _cartItems.value.toMutableList()
+        
+        // 查找是否已存在相同商品（通过goodsId和unitPrice判断）
+        val existingIndex = currentCartItems.indexOfFirst { 
+            it.goodsId == item.goodsId && it.unitPrice == item.unitPrice 
+        }
+        
+        if (existingIndex >= 0) {
+            // 如果商品已存在，更新数量（替换现有记录）
+            currentCartItems[existingIndex] = item
+        } else {
+            // 如果商品不存在，添加新记录
+            currentCartItems.add(item)
+        }
+        
+        _cartItems.value = currentCartItems
+    }
+    
+    /**
+     * 批量添加商品到购物车
+     * 如果商品已存在，则更新数量而不是添加重复项
+     */
+    fun addToCart(items: List<SalesOrderItem>) {
+        if (items.isEmpty()) return
+        val currentCartItems = _cartItems.value.toMutableList()
+        
+        // 处理每个要添加的商品
+        items.forEach { newItem ->
+            // 查找是否已存在相同商品（通过goodsId和unitPrice判断）
+            val existingIndex = currentCartItems.indexOfFirst { 
+                it.goodsId == newItem.goodsId && it.unitPrice == newItem.unitPrice 
+            }
+            
+            if (existingIndex >= 0) {
+                // 如果商品已存在，更新数量（替换现有记录）
+                currentCartItems[existingIndex] = newItem
+            } else {
+                // 如果商品不存在，添加新记录
+                currentCartItems.add(newItem)
+            }
+        }
+        
+        _cartItems.value = currentCartItems
+    }
+    
+    /**
+     * 从购物车移除商品
+     */
+    fun removeFromCart(itemId: String) {
+        val currentCartItems = _cartItems.value.toMutableList()
+        currentCartItems.removeAll { it.id == itemId }
+        _cartItems.value = currentCartItems
+    }
+    
+    /**
+     * 清空购物车
+     */
+    fun clearCart() {
+        _cartItems.value = emptyList()
+    }
+    
+    /**
+     * 将购物车中的商品确认添加到订单
+     */
+    fun confirmCartItems() {
+        val cartItems = _cartItems.value
+        if (cartItems.isNotEmpty()) {
+            addConfirmedItems(cartItems)
+            clearCart() // 添加到订单后清空购物车
+            hideCartDialog() // 关闭购物车对话框
+        }
+    }
+    
+    /**
+     * 显示购物车对话框
+     */
+    fun showCartDialog() {
+        _showCartDialog.value = true
+    }
+    
+    /**
+     * 隐藏购物车对话框
+     */
+    fun hideCartDialog() {
+        _showCartDialog.value = false
     }
     
     /**

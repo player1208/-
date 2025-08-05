@@ -28,6 +28,7 @@ import com.example.storemanagerassitent.ui.home.HomeScreen
 import com.example.storemanagerassitent.ui.profile.ProfileScreen
 import com.example.storemanagerassitent.ui.category.CategoryManagementScreen
 import com.example.storemanagerassitent.ui.sales.SalesOrderScreen
+import com.example.storemanagerassitent.ui.sales.SalesRecordScreen
 import com.example.storemanagerassitent.ui.components.GlobalSuccessSnackbarHost
 import com.example.storemanagerassitent.ui.theme.StoreManagerAssitentTheme
 
@@ -49,6 +50,7 @@ sealed class AppScreen {
     object Profile : AppScreen()
     object CategoryManagement : AppScreen()
     object SalesOrder : AppScreen()
+    object SalesRecord : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -139,6 +141,9 @@ fun MainScreen() {
                 },
                 onSalesOrderClick = {
                     navigateToScreen(AppScreen.SalesOrder)
+                },
+                onSalesRecordClick = {
+                    navigateToScreen(AppScreen.SalesRecord)
                 }
             )
             AppScreen.Inventory -> GoodsManagementScreen(
@@ -152,6 +157,9 @@ fun MainScreen() {
                 onNavigateBack = { navigateBack() }
             )
             AppScreen.SalesOrder -> SalesOrderScreen(
+                onNavigateBack = { navigateBack() }
+            )
+            AppScreen.SalesRecord -> SalesRecordScreen(
                 onNavigateBack = { navigateBack() }
             )
         }
