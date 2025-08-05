@@ -12,6 +12,7 @@ data class Goods(
     val lowStockThreshold: Int = 5, // 低库存阈值，默认5件
     val imageUrl: String? = null,
     val purchasePrice: Double = 0.0, // 进价
+    val retailPrice: Double = 0.0, // 零售价
     val isDelisted: Boolean = false, // 是否已下架
     val lastUpdated: Long = System.currentTimeMillis()
 ) {
@@ -82,7 +83,8 @@ object SampleData {
             specifications = "J-1022",
             stockQuantity = 12,
             lowStockThreshold = 5,
-            purchasePrice = 85.0
+            purchasePrice = 85.0,
+            retailPrice = 128.0
         ),
         Goods(
             id = "2",
@@ -91,7 +93,8 @@ object SampleData {
             specifications = "K-45102T",
             stockQuantity = 3,
             lowStockThreshold = 5,
-            purchasePrice = 260.0
+            purchasePrice = 260.0,
+            retailPrice = 390.0
         ),
         Goods(
             id = "3",
@@ -100,7 +103,8 @@ object SampleData {
             specifications = "HG-2680",
             stockQuantity = 8,
             lowStockThreshold = 5,
-            purchasePrice = 450.0
+            purchasePrice = 450.0,
+            retailPrice = 675.0
         ),
         
         // 手动工具
@@ -111,7 +115,8 @@ object SampleData {
             specifications = "10件套",
             stockQuantity = 15,
             lowStockThreshold = 8,
-            purchasePrice = 45.0
+            purchasePrice = 45.0,
+            retailPrice = 67.5
         ),
         Goods(
             id = "5",
@@ -120,7 +125,8 @@ object SampleData {
             specifications = "8-24mm",
             stockQuantity = 4,
             lowStockThreshold = 6,
-            purchasePrice = 120.0
+            purchasePrice = 120.0,
+            retailPrice = 180.0
         ),
         Goods(
             id = "6",
@@ -129,7 +135,8 @@ object SampleData {
             specifications = "8寸",
             stockQuantity = 20,
             lowStockThreshold = 10,
-            purchasePrice = 25.0
+            purchasePrice = 25.0,
+            retailPrice = 37.5
         ),
         
         // 电动工具
@@ -140,7 +147,8 @@ object SampleData {
             specifications = "GSB120-LI",
             stockQuantity = 6,
             lowStockThreshold = 3,
-            purchasePrice = 580.0
+            purchasePrice = 580.0,
+            retailPrice = 870.0
         ),
         Goods(
             id = "8",
@@ -149,7 +157,8 @@ object SampleData {
             specifications = "GA5030",
             stockQuantity = 2,
             lowStockThreshold = 4,
-            purchasePrice = 320.0
+            purchasePrice = 320.0,
+            retailPrice = 480.0
         ),
         
         // 管材管件
@@ -160,7 +169,8 @@ object SampleData {
             specifications = "DN110×3m",
             stockQuantity = 25,
             lowStockThreshold = 15,
-            purchasePrice = 35.0
+            purchasePrice = 35.0,
+            retailPrice = 52.5
         ),
         Goods(
             id = "10",
@@ -169,7 +179,8 @@ object SampleData {
             specifications = "20mm",
             stockQuantity = 50,
             lowStockThreshold = 30,
-            purchasePrice = 8.5
+            purchasePrice = 8.5,
+            retailPrice = 12.75
         ),
         
         // 螺丝螺母
@@ -180,7 +191,8 @@ object SampleData {
             specifications = "M6×25",
             stockQuantity = 200,
             lowStockThreshold = 100,
-            purchasePrice = 0.5
+            purchasePrice = 0.5,
+            retailPrice = 0.75
         ),
         Goods(
             id = "12",
@@ -189,7 +201,8 @@ object SampleData {
             specifications = "M8",
             stockQuantity = 80,
             lowStockThreshold = 50,
-            purchasePrice = 0.3
+            purchasePrice = 0.3,
+            retailPrice = 0.45
         ),
         
         // 一些零库存商品（用于测试批量下架功能）
@@ -200,7 +213,8 @@ object SampleData {
             specifications = "停产型号",
             stockQuantity = 0,
             lowStockThreshold = 5,
-            purchasePrice = 65.0
+            purchasePrice = 65.0,
+            retailPrice = 97.5
         ),
         Goods(
             id = "14",
@@ -209,7 +223,8 @@ object SampleData {
             specifications = "已过期",
             stockQuantity = 0,
             lowStockThreshold = 10,
-            purchasePrice = 12.0
+            purchasePrice = 12.0,
+            retailPrice = 18.0
         )
     )
 }

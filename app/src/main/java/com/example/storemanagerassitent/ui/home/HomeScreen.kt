@@ -62,7 +62,8 @@ import com.example.storemanagerassitent.data.CategoryOption
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
-    onPurchaseOrderClick: () -> Unit = {}
+    onPurchaseOrderClick: () -> Unit = {},
+    onSalesOrderClick: () -> Unit = {}
 ) {
     val selectedTimePeriod by viewModel.selectedTimePeriod.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -114,10 +115,10 @@ fun HomeScreen(
                             action = action,
                             modifier = Modifier.weight(1f),
                             onMainActionClick = { 
-                                if (action.id == "purchase") {
-                                    onPurchaseOrderClick()
-                                } else {
-                                    viewModel.onQuickActionClick(action.id)
+                                when (action.id) {
+                                    "purchase" -> onPurchaseOrderClick()
+                                    "sales" -> onSalesOrderClick()
+                                    else -> viewModel.onQuickActionClick(action.id)
                                 }
                             },
                             onSecondaryActionClick = { viewModel.onSecondaryActionClick(action.id) }
