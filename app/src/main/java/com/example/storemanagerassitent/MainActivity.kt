@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import com.example.storemanagerassitent.ui.goods.GoodsManagementScreen
 import com.example.storemanagerassitent.ui.home.HomeScreen
 import com.example.storemanagerassitent.ui.profile.ProfileScreen
@@ -80,7 +83,7 @@ class MainActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // 初始化数据存储管理器
         dataStoreManager = DataStoreManager(this)
         
@@ -95,7 +98,18 @@ class MainActivity : ComponentActivity() {
             enableEdgeToEdge()
             setContent {
                 StoreManagerAssitentTheme {
-                    MainScreen(dataStoreManager = dataStoreManager)
+                    var showAppSplash by remember { mutableStateOf(true) }
+                    // 强制最短显示 700ms，保证过渡体验
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(700)
+                        showAppSplash = false
+                    }
+
+                    if (showAppSplash) {
+                        AppSplash()
+                    } else {
+                        MainScreen(dataStoreManager = dataStoreManager)
+                    }
                 }
             }
             
@@ -123,6 +137,20 @@ class MainActivity : ComponentActivity() {
             Log.e("MainActivity", "Failed to log permission status", e)
             CrashReporter.logError("MainActivity", "Failed to log permission status", e)
         }
+    }
+}
+
+@Composable
+fun AppSplash() {
+    // 以底部对齐裁剪，避免图片底部白边出现在屏幕上
+    Box(modifier = Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = R.drawable.startup_screen),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.BottomCenter
+        )
     }
 }
 

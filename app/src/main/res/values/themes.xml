@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.StoreManagerAssitent" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash theme using startup_screen as window background -->
+    <style name="Theme.StoreManagerAssitent.Splash" parent="Theme.StoreManagerAssitent">
+        <item name="android:windowBackground">@drawable/startup_screen</item>
+    </style>
 </resources>
