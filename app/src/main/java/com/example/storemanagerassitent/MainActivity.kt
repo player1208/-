@@ -3,25 +3,33 @@ package com.example.storemanagerassitent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.storemanagerassitent.ui.goods.GoodsManagementScreen
 import com.example.storemanagerassitent.ui.home.HomeScreen
@@ -29,8 +37,17 @@ import com.example.storemanagerassitent.ui.profile.ProfileScreen
 import com.example.storemanagerassitent.ui.category.CategoryManagementScreen
 import com.example.storemanagerassitent.ui.sales.SalesOrderScreen
 import com.example.storemanagerassitent.ui.sales.SalesRecordScreen
+import com.example.storemanagerassitent.ui.purchase.PurchaseRecordScreen
+// PurchaseOrderScreen 已移除，不再使用
 import com.example.storemanagerassitent.ui.components.GlobalSuccessSnackbarHost
 import com.example.storemanagerassitent.ui.theme.StoreManagerAssitentTheme
+import com.example.storemanagerassitent.ui.debug.DebugScreen
+import com.example.storemanagerassitent.data.Goods
+import com.example.storemanagerassitent.data.DataStoreManager
+import com.example.storemanagerassitent.permission.PermissionManager
+import com.example.storemanagerassitent.utils.CrashReporter
+import android.util.Log
+import kotlinx.coroutines.delay
 
 /**
  * 底部导航项
@@ -44,29 +61,73 @@ data class NavigationItem(
 /**
  * 应用页面定义
  */
-sealed class AppScreen {
+ sealed class AppScreen {
     object Home : AppScreen()
     object Inventory : AppScreen()
     object Profile : AppScreen()
     object CategoryManagement : AppScreen()
     object SalesOrder : AppScreen()
-    object SalesRecord : AppScreen()
+     object SalesRecord : AppScreen()
+     object PurchaseRecord : AppScreen()
+     object NewPurchaseEntry : AppScreen()
+     object ManualAddPurchase : AppScreen()
+    object Debug : AppScreen()
 }
 
 class MainActivity : ComponentActivity() {
+    // 数据存储管理器
+    private lateinit var dataStoreManager: DataStoreManager
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            StoreManagerAssitentTheme {
-                MainScreen()
+        
+        // 初始化数据存储管理器
+        dataStoreManager = DataStoreManager(this)
+        
+        try {
+            // 初始化崩溃报告器
+            CrashReporter.init(this)
+            Log.i("MainActivity", "CrashReporter initialized successfully")
+            
+            // 记录权限状态
+            logPermissionStatus()
+            
+            enableEdgeToEdge()
+            setContent {
+                StoreManagerAssitentTheme {
+                    MainScreen(dataStoreManager = dataStoreManager)
+                }
             }
+            
+            Log.i("MainActivity", "MainActivity onCreate completed successfully")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error in onCreate", e)
+            CrashReporter.logError("MainActivity", "Error in onCreate", e)
+            throw e
+        }
+    }
+    
+    private fun logPermissionStatus() {
+        try {
+            val permissionStatus = PermissionManager.checkPermissionStatus(this)
+            val ocrPermissionStatus = PermissionManager.checkOcrPermissionStatus(this)
+            
+            CrashReporter.logPermissionCheck("STORAGE", permissionStatus.storagePermission, "Screen capture functionality")
+            CrashReporter.logPermissionCheck("OVERLAY", permissionStatus.overlayPermission, "Floating button functionality")
+            CrashReporter.logPermissionCheck("FOREGROUND_SERVICE", permissionStatus.foregroundServicePermission, "Media projection service")
+            CrashReporter.logPermissionCheck("CAMERA", ocrPermissionStatus.cameraPermission, "OCR image capture")
+            CrashReporter.logPermissionCheck("MEDIA", ocrPermissionStatus.mediaPermission, "OCR image access")
+            
+            Log.i("MainActivity", "Permission status logged: ${permissionStatus.getStatusDescription()}")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to log permission status", e)
+            CrashReporter.logError("MainActivity", "Failed to log permission status", e)
         }
     }
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(dataStoreManager: DataStoreManager) {
     val navigationItems = listOf(
         NavigationItem("首页", Icons.Filled.Home, "home"),
         NavigationItem("库存", Icons.AutoMirrored.Filled.List, "inventory"),
@@ -78,11 +139,16 @@ fun MainScreen() {
     
     // 全局成功提示的SnackbarHost状态
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    // 从库存页面传递到销售订单页面的商品数据
+    var pendingGoodsData by remember { mutableStateOf<Pair<Goods, Int>?>(null) }
 
     // 处理导航逻辑
     fun navigateToScreen(screen: AppScreen) {
         currentScreen = screen
     }
+
+    var autoOpenPurchaseManualSelection by remember { mutableStateOf(false) }
 
     fun navigateBack() {
         when (currentScreen) {
@@ -97,25 +163,72 @@ fun MainScreen() {
                 currentScreen = AppScreen.Home
                 selectedIndex = 0
             }
+            AppScreen.PurchaseRecord -> {
+                currentScreen = AppScreen.Home
+                selectedIndex = 0
+            }
+            AppScreen.NewPurchaseEntry -> {
+                currentScreen = AppScreen.Home
+                selectedIndex = 0
+            }
+            AppScreen.ManualAddPurchase -> {
+                currentScreen = AppScreen.Home
+                selectedIndex = 0
+            }
+            
+            AppScreen.Debug -> {
+                currentScreen = AppScreen.Profile
+                selectedIndex = 2
+            }
             else -> {
                 // 其他页面不处理返回，由底部导航控制
             }
         }
     }
 
-    // 根据底部导航更新当前页面
-    when (selectedIndex) {
-        0 -> currentScreen = AppScreen.Home
-        1 -> currentScreen = AppScreen.Inventory
-        2 -> currentScreen = AppScreen.Profile
+    // 根据底部导航更新当前页面（仅在处于主标签页时生效，避免覆盖子页面导航）
+    if (currentScreen == AppScreen.Home || currentScreen == AppScreen.Inventory || currentScreen == AppScreen.Profile) {
+        when (selectedIndex) {
+            0 -> currentScreen = AppScreen.Home
+            1 -> currentScreen = AppScreen.Inventory
+            2 -> currentScreen = AppScreen.Profile
+        }
     }
 
-    Scaffold(
-        bottomBar = {
+    val isOnMainTabs = currentScreen == AppScreen.Home || currentScreen == AppScreen.Inventory || currentScreen == AppScreen.Profile
+
+    var showExitHint by remember { mutableStateOf(false) }
+    var lastBackPressedTime by remember { mutableStateOf(0L) }
+
+    val context = LocalContext.current
+    BackHandler(enabled = isOnMainTabs) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressedTime <= 2000) {
+            (context as? ComponentActivity)?.finish()
+        } else {
+            showExitHint = true
+            lastBackPressedTime = now
+        }
+    }
+
+    if (showExitHint) {
+        LaunchedEffect(showExitHint) {
+            delay(1500)
+            showExitHint = false
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            bottomBar = {
             // 只在主要页面显示底部导航栏
             if (currentScreen != AppScreen.CategoryManagement && 
                 currentScreen != AppScreen.SalesOrder && 
-                currentScreen != AppScreen.SalesRecord) {
+                currentScreen != AppScreen.SalesRecord &&
+                currentScreen != AppScreen.PurchaseRecord &&
+                currentScreen != AppScreen.NewPurchaseEntry &&
+                currentScreen != AppScreen.ManualAddPurchase &&
+                currentScreen != AppScreen.Debug) {
                 NavigationBar {
                     navigationItems.forEachIndexed { index, item ->
                         NavigationBarItem(
@@ -134,40 +247,97 @@ fun MainScreen() {
                     }
                 }
             }
-        },
-        snackbarHost = {
-            GlobalSuccessSnackbarHost(snackbarHostState = snackbarHostState)
-        }
-    ) { paddingValues ->
-        when (currentScreen) {
+            },
+            snackbarHost = {
+                GlobalSuccessSnackbarHost(snackbarHostState = snackbarHostState)
+            }
+        ) { paddingValues ->
+            when (currentScreen) {
             AppScreen.Home -> HomeScreen(
+                modifier = Modifier.padding(paddingValues),
                 onPurchaseOrderClick = {
-                    // TODO: 实现进货开单功能，导航到进货开单页面
-                    // 这里将来可以导航到具体的进货开单页面
+                    navigateToScreen(AppScreen.NewPurchaseEntry)
                 },
                 onSalesOrderClick = {
                     navigateToScreen(AppScreen.SalesOrder)
                 },
                 onSalesRecordClick = {
                     navigateToScreen(AppScreen.SalesRecord)
+                },
+                onPurchaseRecordClick = {
+                    navigateToScreen(AppScreen.PurchaseRecord)
                 }
             )
-            AppScreen.Inventory -> GoodsManagementScreen(
+
+                AppScreen.Inventory -> GoodsManagementScreen(
                 modifier = Modifier.padding(paddingValues),
                 onNavigateToCategoryManagement = {
                     navigateToScreen(AppScreen.CategoryManagement)
+                },
+                onNavigateToSalesOrder = { goods, quantity ->
+                    // 存储待传递的商品数据
+                    pendingGoodsData = Pair(goods, quantity)
+                    navigateToScreen(AppScreen.SalesOrder)
                 }
-            )
-            AppScreen.Profile -> ProfileScreen()
-            AppScreen.CategoryManagement -> CategoryManagementScreen(
-                onNavigateBack = { navigateBack() }
-            )
-            AppScreen.SalesOrder -> SalesOrderScreen(
-                onNavigateBack = { navigateBack() }
-            )
-            AppScreen.SalesRecord -> SalesRecordScreen(
-                onNavigateBack = { navigateBack() }
-            )
+                )
+                AppScreen.Profile -> ProfileScreen()
+                AppScreen.CategoryManagement -> CategoryManagementScreen(
+                    onNavigateBack = { navigateBack() }
+                )
+                AppScreen.SalesOrder -> SalesOrderScreen(
+                    onNavigateBack = {
+                        pendingGoodsData = null
+                        navigateBack()
+                    },
+                    prefillGoodsData = pendingGoodsData?.let { (goods, quantity) ->
+                        { viewModel ->
+                            viewModel.initializeDataStore(dataStoreManager)
+                            viewModel.prefillGoodsData(goods, quantity)
+                            pendingGoodsData = null
+                        }
+                    }
+                )
+                AppScreen.NewPurchaseEntry -> com.example.storemanagerassitent.ui.purchase.NewPurchaseEntryScreen(
+                    onNavigateBack = { navigateBack() },
+                    onManualAddClick = {
+                        navigateToScreen(AppScreen.ManualAddPurchase)
+                    },
+                    onSmartImportClick = {
+                        com.example.storemanagerassitent.ui.components.GlobalSuccessMessage.showSuccess("该功能正在开发中，敬请期待！")
+                    }
+                )
+                AppScreen.ManualAddPurchase -> com.example.storemanagerassitent.ui.purchase.ManualAddPurchaseScreen(
+                    onNavigateBack = { navigateBack() }
+                )
+                AppScreen.SalesRecord -> SalesRecordScreen(
+                    onNavigateBack = { navigateBack() }
+                )
+                AppScreen.PurchaseRecord -> PurchaseRecordScreen(
+                    onNavigateBack = { navigateBack() }
+                )
+                AppScreen.Debug -> DebugScreen(
+                    onNavigateBack = { navigateBack() }
+                )
+            }
+        }
+
+        if (showExitHint && isOnMainTabs) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.85f),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    Text(
+                        text = "再滑一下退出小店财务官",
+                        color = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -176,6 +346,7 @@ fun MainScreen() {
 @Composable
 fun MainActivityPreview() {
     StoreManagerAssitentTheme {
-        MainScreen()
+        // 预览时跳过MainScreen
+        Text("MainActivity Preview")
     }
 }

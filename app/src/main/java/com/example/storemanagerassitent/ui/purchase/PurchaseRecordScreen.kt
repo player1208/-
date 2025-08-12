@@ -1,4 +1,4 @@
-package com.example.storemanagerassitent.ui.sales
+package com.example.storemanagerassitent.ui.purchase
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -62,21 +62,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.storemanagerassitent.data.DateFilterType
-import com.example.storemanagerassitent.data.SalesOrder
+import com.example.storemanagerassitent.data.PurchaseOrder
 import com.example.storemanagerassitent.data.SalesOrderFormatter
-import com.example.storemanagerassitent.data.SalesRecordSummary
+import com.example.storemanagerassitent.data.PurchaseRecordSummary
+import com.example.storemanagerassitent.ui.sales.CalendarBottomSheet
+import com.example.storemanagerassitent.ui.sales.DateRangeCalendarBottomSheet
 
 /**
- * 销售记录主页面
+ * 进货记录主页面
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun SalesRecordScreen(
+fun PurchaseRecordScreen(
     onNavigateBack: () -> Unit = {},
-    viewModel: SalesRecordViewModel = viewModel()
+    viewModel: PurchaseRecordViewModel = viewModel()
 ) {
     val dateFilterState by viewModel.dateFilterState.collectAsState()
-    val salesRecords by viewModel.filteredSalesRecords.collectAsState()
+    val purchaseRecords by viewModel.filteredPurchaseRecords.collectAsState()
     val searchText by viewModel.searchText.collectAsState()
     val showDatePicker by viewModel.showDatePicker.collectAsState()
     val showCalendar by viewModel.showCalendar.collectAsState()
@@ -125,7 +127,7 @@ fun SalesRecordScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "销售记录",
+                        text = "进货记录",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -177,7 +179,7 @@ fun SalesRecordScreen(
                     .onFocusChanged { state -> isSearchFocused = state.isFocused }
             )
             
-            // 销售记录列表
+            // 进货记录列表
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -185,7 +187,7 @@ fun SalesRecordScreen(
                 ) {
                     CircularProgressIndicator()
                 }
-            } else if (salesRecords.isEmpty()) {
+            } else if (purchaseRecords.isEmpty()) {
                 EmptyRecordsView(
                     modifier = Modifier.fillMaxSize()
                 )
@@ -195,7 +197,7 @@ fun SalesRecordScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    val groupedRecords = salesRecords.groupBy { record ->
+                    val groupedRecords = purchaseRecords.groupBy { record ->
                         val date = java.util.Date(record.createdAt)
                         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA).format(date)
                     }.toList().sortedByDescending { it.first }
@@ -212,7 +214,7 @@ fun SalesRecordScreen(
                         }
                         
                         items(records, key = { it.orderId }) { record ->
-                            SalesRecordCard(
+                            PurchaseRecordCard(
                                 record = record,
                                 onClick = { viewModel.showOrderDetails(record.orderId) }
                             )
@@ -257,7 +259,7 @@ fun SalesRecordScreen(
                 onDismissRequest = viewModel::hideOrderDetails,
                 sheetState = bottomSheetState
             ) {
-                OrderDetailsPanel(
+                PurchaseOrderDetailsPanel(
                     order = selectedOrder!!,
                     onDismiss = viewModel::hideOrderDetails
                 )
@@ -320,11 +322,11 @@ fun DateFilterBar(
 }
 
 /**
- * 销售记录卡片
+ * 进货记录卡片
  */
 @Composable
-fun SalesRecordCard(
-    record: SalesRecordSummary,
+fun PurchaseRecordCard(
+    record: PurchaseRecordSummary,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -364,11 +366,11 @@ fun SalesRecordCard(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
                 
-                // 客户信息（如果有）
-                if (record.customerName.isNotBlank()) {
+                // 供应商信息（如果有）
+                if (record.supplierName.isNotBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "客户: ${record.customerName}",
+                        text = "供应商: ${record.supplierName}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -421,7 +423,7 @@ fun EmptyRecordsView(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "该时间段内暂无销售记录",
+                text = "该时间段内暂无进货记录",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center
@@ -543,11 +545,11 @@ fun DatePickerDialog(
 }
 
 /**
- * 订单详情面板
+ * 进货订单详情面板
  */
 @Composable
-fun OrderDetailsPanel(
-    order: SalesOrder,
+fun PurchaseOrderDetailsPanel(
+    order: PurchaseOrder,
     onDismiss: () -> Unit
 ) {
     Column(
@@ -562,7 +564,7 @@ fun OrderDetailsPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "订单详情",
+                text = "进货订单详情",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -576,20 +578,20 @@ fun OrderDetailsPanel(
         // 订单号与时间
         OrderDetailsSection(title = "订单信息") {
             DetailRow("订单号", order.id)
-            DetailRow("下单时间", java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.CHINA).format(java.util.Date(order.createdAt)))
+            DetailRow("进货时间", java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.CHINA).format(java.util.Date(order.createdAt)))
         }
         
-        // 客户信息
-        if (order.customerName.isNotBlank() || order.customerPhone.isNotBlank() || order.customerAddress.isNotBlank()) {
-            OrderDetailsSection(title = "客户信息") {
-                if (order.customerName.isNotBlank()) {
-                    DetailRow("客户姓名", order.customerName)
+        // 供应商信息
+        if (order.supplierName.isNotBlank() || order.supplierPhone.isNotBlank() || order.supplierAddress.isNotBlank()) {
+            OrderDetailsSection(title = "供应商信息") {
+                if (order.supplierName.isNotBlank()) {
+                    DetailRow("供应商名称", order.supplierName)
                 }
-                if (order.customerPhone.isNotBlank()) {
-                    DetailRow("联系电话", order.customerPhone)
+                if (order.supplierPhone.isNotBlank()) {
+                    DetailRow("联系电话", order.supplierPhone)
                 }
-                if (order.customerAddress.isNotBlank()) {
-                    DetailRow("收货地址", order.customerAddress)
+                if (order.supplierAddress.isNotBlank()) {
+                    DetailRow("供应商地址", order.supplierAddress)
                 }
             }
         }
@@ -608,13 +610,13 @@ fun OrderDetailsPanel(
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "${SalesOrderFormatter.formatCurrency(item.unitPrice)} × ${item.quantity}",
+                            text = "${SalesOrderFormatter.formatCurrency(item.purchasePrice)} × ${item.quantity}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
                     Text(
-                        text = SalesOrderFormatter.formatCurrency(item.subtotal),
+                        text = SalesOrderFormatter.formatCurrency(item.purchasePrice * item.quantity),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
@@ -625,12 +627,6 @@ fun OrderDetailsPanel(
         
         // 支付详情
         OrderDetailsSection(title = "支付详情") {
-            DetailRow("支付方式", order.paymentMethod.displayName)
-            DetailRow("付款类型", order.paymentType?.displayName ?: "未知")
-            if (order.paymentType?.name == "DEPOSIT") {
-                DetailRow("定金金额", SalesOrderFormatter.formatCurrency(order.depositAmount))
-                DetailRow("待付余额", SalesOrderFormatter.formatCurrency(order.remainingAmount))
-            }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             DetailRow(
                 "合计金额", 
@@ -699,7 +695,7 @@ fun SearchBar(
     OutlinedTextField(
         value = searchText,
         onValueChange = onSearchTextChange,
-        label = { Text("搜索订单号、客户姓名或商品名称") },
+        label = { Text("搜索订单号、供应商名称或商品名称") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "搜索") },
         modifier = modifier.fillMaxWidth(),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
@@ -783,3 +779,4 @@ fun formatDateDisplay(date: String): String {
         }
     }
 }
+

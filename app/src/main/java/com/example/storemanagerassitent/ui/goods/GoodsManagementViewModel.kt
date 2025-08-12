@@ -72,6 +72,34 @@ class GoodsManagementViewModel : ViewModel() {
     private val _outboundQuantity = MutableStateFlow(1)
     val outboundQuantity: StateFlow<Int> = _outboundQuantity.asStateFlow()
     
+    // 销售数量输入对话框是否显示
+    private val _showSaleQuantityDialog = MutableStateFlow(false)
+    val showSaleQuantityDialog: StateFlow<Boolean> = _showSaleQuantityDialog.asStateFlow()
+    
+    // 销售数量
+    private val _saleQuantity = MutableStateFlow(1)
+    val saleQuantity: StateFlow<Int> = _saleQuantity.asStateFlow()
+    
+    // 入库数量输入对话框是否显示
+    private val _showInboundQuantityDialog = MutableStateFlow(false)
+    val showInboundQuantityDialog: StateFlow<Boolean> = _showInboundQuantityDialog.asStateFlow()
+    
+    // 入库数量
+    private val _inboundQuantity = MutableStateFlow(1)
+    val inboundQuantity: StateFlow<Int> = _inboundQuantity.asStateFlow()
+    
+    // 库存编辑确认对话框是否显示
+    private val _showStockEditConfirmDialog = MutableStateFlow(false)
+    val showStockEditConfirmDialog: StateFlow<Boolean> = _showStockEditConfirmDialog.asStateFlow()
+    
+    // 库存编辑对话框是否显示
+    private val _showStockEditDialog = MutableStateFlow(false)
+    val showStockEditDialog: StateFlow<Boolean> = _showStockEditDialog.asStateFlow()
+    
+    // 库存编辑数量
+    private val _stockEditQuantity = MutableStateFlow(1)
+    val stockEditQuantity: StateFlow<Int> = _stockEditQuantity.asStateFlow()
+    
     // 批量下架模式相关状态
     private val _isBatchDelistMode = MutableStateFlow(false)
     val isBatchDelistMode: StateFlow<Boolean> = _isBatchDelistMode.asStateFlow()
@@ -224,10 +252,12 @@ class GoodsManagementViewModel : ViewModel() {
     }
     
     /**
-     * 显示出库原因选择对话框
+     * 显示出库原因选择对话框（已废弃，直接进入销售界面）
      */
     fun showOutboundReasonDialog() {
-        _showOutboundReasonDialog.value = true
+        // 直接显示销售数量输入对话框，跳过出库原因选择
+        _saleQuantity.value = 1 // 重置数量为1
+        _showSaleQuantityDialog.value = true
     }
     
     /**
@@ -244,10 +274,9 @@ class GoodsManagementViewModel : ViewModel() {
         _showOutboundReasonDialog.value = false
         when (reason) {
             OutboundReason.SOLD -> {
-                // TODO: 未来实现售出功能
-            }
-            OutboundReason.INVENTORY_ERROR -> {
-                _showStockAdjustmentDialog.value = true
+                // 显示销售数量输入对话框
+                _saleQuantity.value = 1 // 重置数量为1
+                _showSaleQuantityDialog.value = true
             }
         }
     }
@@ -520,5 +549,227 @@ class GoodsManagementViewModel : ViewModel() {
         
         // 显示成功提示
         GlobalSuccessMessage.showSuccess("分类已更新")
+    }
+    
+    /**
+     * 显示销售数量输入对话框
+     */
+    fun showSaleQuantityDialog() {
+        _saleQuantity.value = 1
+        _showSaleQuantityDialog.value = true
+    }
+    
+    /**
+     * 隐藏销售数量输入对话框
+     */
+    fun hideSaleQuantityDialog() {
+        _showSaleQuantityDialog.value = false
+    }
+    
+    /**
+     * 更新销售数量
+     */
+    fun updateSaleQuantity(quantity: Int) {
+        if (quantity > 0) {
+            _saleQuantity.value = quantity
+        }
+    }
+    
+    /**
+     * 增加销售数量
+     */
+    fun increaseSaleQuantity() {
+        val goods = _selectedGoods.value
+        if (goods != null && _saleQuantity.value < goods.stockQuantity) {
+            _saleQuantity.value++
+        }
+    }
+    
+    /**
+     * 减少销售数量
+     */
+    fun decreaseSaleQuantity() {
+        if (_saleQuantity.value > 1) {
+            _saleQuantity.value--
+        }
+    }
+    
+    /**
+     * 确认销售并跳转到销售订单页面
+     */
+    fun confirmSaleAndNavigate(onNavigateToSales: (Goods, Int) -> Unit) {
+        val goods = _selectedGoods.value
+        val quantity = _saleQuantity.value
+        
+        if (goods != null && quantity > 0 && quantity <= goods.stockQuantity) {
+            // 隐藏所有对话框
+            _showSaleQuantityDialog.value = false
+            _showGoodsDetail.value = false
+            
+            // 跳转到销售订单页面并传递商品数据
+            onNavigateToSales(goods, quantity)
+        }
+    }
+    
+    /**
+     * 显示入库数量输入对话框
+     */
+    fun showInboundQuantityDialog() {
+        _inboundQuantity.value = 1
+        _showInboundQuantityDialog.value = true
+    }
+    
+    /**
+     * 隐藏入库数量输入对话框
+     */
+    fun hideInboundQuantityDialog() {
+        _showInboundQuantityDialog.value = false
+    }
+    
+    /**
+     * 更新入库数量
+     */
+    fun updateInboundQuantity(quantity: Int) {
+        if (quantity > 0) {
+            _inboundQuantity.value = quantity
+        }
+    }
+    
+    /**
+     * 增加入库数量
+     */
+    fun increaseInboundQuantity() {
+        _inboundQuantity.value++
+    }
+    
+    /**
+     * 减少入库数量
+     */
+    fun decreaseInboundQuantity() {
+        if (_inboundQuantity.value > 1) {
+            _inboundQuantity.value--
+        }
+    }
+    
+    /**
+     * 确认入库
+     */
+    fun confirmInbound() {
+        val goods = _selectedGoods.value
+        val quantity = _inboundQuantity.value
+        
+        if (goods != null && quantity > 0) {
+            // 更新商品库存
+            val updatedGoods = goods.copy(stockQuantity = goods.stockQuantity + quantity)
+            _selectedGoods.value = updatedGoods
+            
+            // 更新全量商品列表中的数据
+            val updatedGoodsList = _allGoods.value.map { g ->
+                if (g.id == goods.id) {
+                    updatedGoods
+                } else {
+                    g
+                }
+            }
+            _allGoods.value = updatedGoodsList
+            
+            // 隐藏对话框
+            _showInboundQuantityDialog.value = false
+            
+            // 显示成功提示
+            GlobalSuccessMessage.showSuccess("入库成功！")
+        }
+    }
+    
+    /**
+     * 显示库存编辑确认对话框
+     */
+    fun showStockEditConfirmDialog() {
+        val goods = _selectedGoods.value
+        if (goods != null) {
+            _stockEditQuantity.value = goods.stockQuantity
+            _showStockEditConfirmDialog.value = true
+        }
+    }
+    
+    /**
+     * 隐藏库存编辑确认对话框
+     */
+    fun hideStockEditConfirmDialog() {
+        _showStockEditConfirmDialog.value = false
+    }
+    
+    /**
+     * 显示库存编辑对话框
+     */
+    fun showStockEditDialog() {
+        val goods = _selectedGoods.value
+        if (goods != null) {
+            _stockEditQuantity.value = goods.stockQuantity
+            _showStockEditDialog.value = true
+        }
+    }
+    
+    /**
+     * 隐藏库存编辑对话框
+     */
+    fun hideStockEditDialog() {
+        _showStockEditDialog.value = false
+    }
+    
+    /**
+     * 更新库存编辑数量
+     */
+    fun updateStockEditQuantity(quantity: Int) {
+        if (quantity >= 0) {
+            _stockEditQuantity.value = quantity
+        }
+    }
+    
+    /**
+     * 增加库存编辑数量
+     */
+    fun increaseStockEditQuantity() {
+        _stockEditQuantity.value++
+    }
+    
+    /**
+     * 减少库存编辑数量
+     */
+    fun decreaseStockEditQuantity() {
+        if (_stockEditQuantity.value > 0) {
+            _stockEditQuantity.value--
+        }
+    }
+    
+    /**
+     * 确认库存编辑
+     */
+    fun confirmStockEdit() {
+        val goods = _selectedGoods.value
+        val quantity = _stockEditQuantity.value
+        
+        if (goods != null && quantity >= 0) {
+            // 更新商品库存
+            val updatedGoods = goods.copy(stockQuantity = quantity)
+            _selectedGoods.value = updatedGoods
+            
+            // 更新全量商品列表中的数据
+            val updatedGoodsList = _allGoods.value.map { g ->
+                if (g.id == goods.id) {
+                    updatedGoods
+                } else {
+                    g
+                }
+            }
+            _allGoods.value = updatedGoodsList
+            
+            // 隐藏对话框
+            _showStockEditDialog.value = false
+            _showStockEditConfirmDialog.value = false
+            
+            // 显示成功提示
+            GlobalSuccessMessage.showSuccess("库存已更新！")
+        }
     }
 }

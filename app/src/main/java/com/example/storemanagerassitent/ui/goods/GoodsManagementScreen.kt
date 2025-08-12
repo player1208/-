@@ -14,11 +14,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
@@ -49,11 +53,25 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,17 +79,24 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.compose.BackHandler
 import com.example.storemanagerassitent.data.Goods
 import com.example.storemanagerassitent.data.GoodsCategory
 import com.example.storemanagerassitent.data.SampleData
 import com.example.storemanagerassitent.data.SortOption
+import com.example.storemanagerassitent.ui.components.EmptyStates
+import com.example.storemanagerassitent.ui.components.InlineLoading
+import com.example.storemanagerassitent.ui.components.ErrorState
 import com.example.storemanagerassitent.ui.theme.StoreManagerAssitentTheme
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoodsManagementScreen(
     modifier: Modifier = Modifier,
     onNavigateToCategoryManagement: () -> Unit = {},
+    onNavigateToSalesOrder: (Goods, Int) -> Unit = { _, _ -> },
     viewModel: GoodsManagementViewModel = viewModel()
 ) {
     // 收集ViewModel中的状态
@@ -86,10 +111,19 @@ fun GoodsManagementScreen(
     // 详情面板和对话框状态
     val selectedGoods by viewModel.selectedGoods.collectAsState()
     val showGoodsDetail by viewModel.showGoodsDetail.collectAsState()
-    val showOutboundReasonDialog by viewModel.showOutboundReasonDialog.collectAsState()
+
     val showStockAdjustmentDialog by viewModel.showStockAdjustmentDialog.collectAsState()
     val showFinalConfirmDialog by viewModel.showFinalConfirmDialog.collectAsState()
     val outboundQuantity by viewModel.outboundQuantity.collectAsState()
+    val showSaleQuantityDialog by viewModel.showSaleQuantityDialog.collectAsState()
+    val saleQuantity by viewModel.saleQuantity.collectAsState()
+    
+    // 入库和库存编辑相关状态
+    val showInboundQuantityDialog by viewModel.showInboundQuantityDialog.collectAsState()
+    val inboundQuantity by viewModel.inboundQuantity.collectAsState()
+    val showStockEditConfirmDialog by viewModel.showStockEditConfirmDialog.collectAsState()
+    val showStockEditDialog by viewModel.showStockEditDialog.collectAsState()
+    val stockEditQuantity by viewModel.stockEditQuantity.collectAsState()
     
     // 批量下架相关状态
     val isBatchDelistMode by viewModel.isBatchDelistMode.collectAsState()
@@ -112,6 +146,37 @@ fun GoodsManagementScreen(
         viewModel.getLowStockCount(filteredGoods)
     }
     
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
+
+    // 当搜索处于展开状态时，拦截系统返回键以先收起搜索
+    BackHandler(enabled = isSearchExpanded) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+
+    // 规则二：键盘收起后搜索框联动收起（基于 WindowInsetsCompat）
+    val rootView = LocalView.current.rootView
+    DisposableEffect(isSearchExpanded) {
+        if (!isSearchExpanded) return@DisposableEffect onDispose { }
+        var hasShownKeyboard = false
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { _, insets ->
+            val imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            if (imeVisible) {
+                hasShownKeyboard = true
+            } else if (hasShownKeyboard) {
+                focusManager.clearFocus()
+                viewModel.toggleSearchExpanded()
+            }
+            insets
+        }
+        rootView.requestApplyInsets()
+        onDispose {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, null)
+        }
+    }
+
     Scaffold(
         topBar = {
             if (isBatchDelistMode) {
@@ -140,38 +205,62 @@ fun GoodsManagementScreen(
         },
         modifier = modifier
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 分类筛选栏
-            CategoryFilterBar(
-                categories = categories,
-                selectedCategory = selectedCategory,
-                onCategorySelected = viewModel::selectCategory
-            )
-            
-            // 商品列表
-            Box(modifier = Modifier.fillMaxSize()) {
-                GoodsList(
-                    groupedGoods = groupedGoods,
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // 分类筛选栏
+                CategoryFilterBar(
                     categories = categories,
-                    isBatchDelistMode = isBatchDelistMode,
-                    selectedGoodsIds = selectedGoodsIds,
-                    problemGoodsIds = problemGoodsIds,
-                    onGoodsClick = if (isBatchDelistMode) null else viewModel::selectGoods,
-                    onGoodsToggleSelection = if (isBatchDelistMode) viewModel::toggleGoodsSelection else null,
-                    modifier = Modifier.fillMaxSize()
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = viewModel::selectCategory
                 )
-                
-                // 底部信息条（批量模式时显示）
-                if (isBatchDelistMode) {
-                    BottomInfoBar(
-                        selectedCount = selectedGoodsIds.size,
-                        modifier = Modifier.align(Alignment.BottomCenter)
+
+                // 商品列表
+                Box(modifier = Modifier.fillMaxSize()) {
+                    GoodsList(
+                        groupedGoods = groupedGoods,
+                        categories = categories,
+                        isBatchDelistMode = isBatchDelistMode,
+                        selectedGoodsIds = selectedGoodsIds,
+                        problemGoodsIds = problemGoodsIds,
+                        onGoodsClick = if (isBatchDelistMode) null else viewModel::selectGoods,
+                        onGoodsToggleSelection = if (isBatchDelistMode) viewModel::toggleGoodsSelection else null,
+                        onAddGoods = {
+                            // TODO: 导航到添加商品页面
+                            // 现在先显示一个提示
+                            // GlobalMessageManager.showInfo("添加商品功能开发中")
+                        },
+                        modifier = Modifier.fillMaxSize()
                     )
+
+                    // 底部信息条（批量模式时显示）
+                    if (isBatchDelistMode) {
+                        BottomInfoBar(
+                            selectedCount = selectedGoodsIds.size,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                    }
                 }
+            }
+
+            // 点击内容区域空白处自动收起搜索
+            if (isSearchExpanded) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        }
+                )
             }
         }
         
@@ -182,22 +271,15 @@ fun GoodsManagementScreen(
                     goods = goods,
                     categories = categories,
                     onDismiss = viewModel::closeGoodsDetail,
-                    onInboundClick = {
-                        // TODO: 实现入库功能
-                    },
+                    onInboundClick = viewModel::showInboundQuantityDialog,
                     onOutboundClick = viewModel::showOutboundReasonDialog,
-                    onCategoryEditClick = viewModel::showCategorySelector
+                    onCategoryEditClick = viewModel::showCategorySelector,
+                    onStockEditClick = viewModel::showStockEditConfirmDialog
                 )
             }
         }
         
-        // 出库原因选择对话框
-        if (showOutboundReasonDialog) {
-            OutboundReasonDialog(
-                onDismiss = viewModel::hideOutboundReasonDialog,
-                onReasonSelected = viewModel::selectOutboundReason
-            )
-        }
+
         
         // 库存调整对话框
         selectedGoods?.let { goods ->
@@ -222,6 +304,23 @@ fun GoodsManagementScreen(
                     outboundQuantity = outboundQuantity,
                     onDismiss = viewModel::hideFinalConfirmDialog,
                     onConfirm = viewModel::executeOutbound
+                )
+            }
+        }
+        
+        // 销售数量输入对话框
+        selectedGoods?.let { goods ->
+            if (showSaleQuantityDialog) {
+                SaleQuantityDialog(
+                    goods = goods,
+                    quantity = saleQuantity,
+                    onDismiss = viewModel::hideSaleQuantityDialog,
+                    onQuantityChange = viewModel::updateSaleQuantity,
+                    onIncrease = viewModel::increaseSaleQuantity,
+                    onDecrease = viewModel::decreaseSaleQuantity,
+                    onConfirm = {
+                        viewModel.confirmSaleAndNavigate(onNavigateToSalesOrder)
+                    }
                 )
             }
         }
@@ -256,6 +355,44 @@ fun GoodsManagementScreen(
                 )
             }
         }
+        
+        // 入库数量输入对话框
+        selectedGoods?.let { goods ->
+            if (showInboundQuantityDialog) {
+                InboundQuantityDialog(
+                    goods = goods,
+                    quantity = inboundQuantity,
+                    onDismiss = viewModel::hideInboundQuantityDialog,
+                    onQuantityChange = viewModel::updateInboundQuantity,
+                    onIncrease = viewModel::increaseInboundQuantity,
+                    onDecrease = viewModel::decreaseInboundQuantity,
+                    onConfirm = viewModel::confirmInbound
+                )
+            }
+        }
+        
+        // 库存编辑确认对话框
+        if (showStockEditConfirmDialog) {
+            StockEditConfirmDialog(
+                onDismiss = viewModel::hideStockEditConfirmDialog,
+                onConfirm = viewModel::showStockEditDialog
+            )
+        }
+        
+        // 库存编辑对话框
+        selectedGoods?.let { goods ->
+            if (showStockEditDialog) {
+                StockEditDialog(
+                    goods = goods,
+                    quantity = stockEditQuantity,
+                    onDismiss = viewModel::hideStockEditDialog,
+                    onQuantityChange = viewModel::updateStockEditQuantity,
+                    onIncrease = viewModel::increaseStockEditQuantity,
+                    onDecrease = viewModel::decreaseStockEditQuantity,
+                    onConfirm = viewModel::confirmStockEdit
+                )
+            }
+        }
     }
 }
 
@@ -279,12 +416,23 @@ fun GoodsTopAppBar(
 ) {
     TopAppBar(
         title = {
+            val focusManager = LocalFocusManager.current
+            val keyboardController = LocalSoftwareKeyboardController.current
+
             if (isSearchExpanded) {
+                val focusRequester = remember { FocusRequester() }
                 TextField(
                     value = searchText,
                     onValueChange = onSearchTextChange,
                     placeholder = { Text("搜索商品名称、规格...") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { state ->
+                            if (isSearchExpanded && !state.isFocused) {
+                                keyboardController?.hide()
+                            }
+                        },
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -293,6 +441,11 @@ fun GoodsTopAppBar(
                         unfocusedIndicatorColor = Color.Transparent
                     )
                 )
+                // 确保在布局后请求焦点
+                LaunchedEffect(Unit) {
+                    focusRequester.requestFocus()
+                    keyboardController?.show()
+                }
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically
@@ -512,31 +665,47 @@ fun GoodsList(
     problemGoodsIds: Set<String> = emptySet(),
     onGoodsClick: ((Goods) -> Unit)? = null,
     onGoodsToggleSelection: ((String) -> Unit)? = null,
+    onAddGoods: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        groupedGoods.forEach { (categoryName, goodsList) ->
-            // 分类标题（粘性标题效果需要额外实现）
-            item {
-                CategoryHeader(categoryName = categoryName)
+    if (groupedGoods.isEmpty()) {
+        // 显示空状态
+        EmptyStates.NoGoods(
+            onAddGoods = onAddGoods ?: {}
+        )
+    } else {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = modifier,
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            groupedGoods.forEach { (categoryName, goodsList) ->
+                // 退回普通标题（不使用 stickyHeader 以避免依赖)
+                item {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.background,
+                        shadowElevation = 0.dp
+                    ) {
+                        CategoryHeader(categoryName = categoryName)
+                    }
+                }
+
+                // 分类下的商品
+                items(goodsList, key = { it.id }) { goods ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        GoodsCard(
+                            goods = goods,
+                            categories = categories,
+                            isBatchDelistMode = isBatchDelistMode,
+                            isSelected = selectedGoodsIds.contains(goods.id),
+                            isProblem = problemGoodsIds.contains(goods.id),
+                            onGoodsClick = onGoodsClick,
+                            onToggleSelection = onGoodsToggleSelection
+                        )
+                    }
+                }
             }
-            
-            // 分类下的商品
-            items(goodsList) { goods ->
-                GoodsCard(
-                    goods = goods,
-                    categories = categories,
-                    isBatchDelistMode = isBatchDelistMode,
-                    isSelected = selectedGoodsIds.contains(goods.id),
-                    isProblem = problemGoodsIds.contains(goods.id),
-                    onGoodsClick = onGoodsClick,
-                    onToggleSelection = onGoodsToggleSelection
-                )
-            }
+            item { Spacer(Modifier.height(8.dp)) }
         }
     }
 }

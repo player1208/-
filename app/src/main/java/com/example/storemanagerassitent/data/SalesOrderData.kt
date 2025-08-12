@@ -2,10 +2,12 @@ package com.example.storemanagerassitent.data
 
 import java.text.DecimalFormat
 import java.util.UUID
+import kotlinx.serialization.Serializable
 
 /**
  * 销售订单项
  */
+@Serializable
 data class SalesOrderItem(
     val id: String = UUID.randomUUID().toString(),
     val goodsId: String,

@@ -57,8 +57,7 @@ enum class SortOption(val displayName: String) {
  * 出库原因
  */
 enum class OutboundReason(val displayName: String) {
-    SOLD("商品售出"),
-    INVENTORY_ERROR("库存盘点错误")
+    SOLD("商品售出")
 }
 
 /**

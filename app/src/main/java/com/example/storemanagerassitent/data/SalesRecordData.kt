@@ -9,13 +9,15 @@ import java.util.Locale
  * 日期筛选类型
  */
 enum class DateFilterType(val displayName: String) {
+    ALL("全部订单"),
     TODAY("今天"),
     THIS_WEEK("本周"),
     THIS_MONTH("本月"),
     THIS_YEAR("今年"),
     CUSTOM_DATE("自定义日期"),
     CUSTOM_MONTH("自定义月份"),
-    CUSTOM_YEAR("自定义年份")
+    CUSTOM_YEAR("自定义年份"),
+    CUSTOM_DATE_RANGE("自定义范围")
 }
 
 /**
@@ -25,13 +27,16 @@ data class DateFilterState(
     val filterType: DateFilterType = DateFilterType.TODAY,
     val customDate: Date? = null,
     val customMonth: Int? = null, // 1-12
-    val customYear: Int? = null
+    val customYear: Int? = null,
+    val customStartDate: Date? = null,
+    val customEndDate: Date? = null
 ) {
     /**
      * 获取显示文本
      */
     fun getDisplayText(): String {
         return when (filterType) {
+            DateFilterType.ALL -> "全部订单"
             DateFilterType.TODAY -> "今天"
             DateFilterType.THIS_WEEK -> "本周"
             DateFilterType.THIS_MONTH -> "本月"
@@ -49,6 +54,13 @@ data class DateFilterState(
             DateFilterType.CUSTOM_YEAR -> {
                 customYear?.let { "${it}年" } ?: "自定义年份"
             }
+            DateFilterType.CUSTOM_DATE_RANGE -> {
+                if (customStartDate != null && customEndDate != null) {
+                    val startStr = SimpleDateFormat("MM月dd日", Locale.CHINA).format(customStartDate)
+                    val endStr = SimpleDateFormat("MM月dd日", Locale.CHINA).format(customEndDate)
+                    "$startStr - $endStr"
+                } else "自定义范围"
+            }
         }
     }
     
@@ -59,6 +71,7 @@ data class DateFilterState(
         val calendar = Calendar.getInstance()
         
         return when (filterType) {
+            DateFilterType.ALL -> (0L to Long.MAX_VALUE)
             DateFilterType.TODAY -> {
                 calendar.set(Calendar.HOUR_OF_DAY, 0)
                 calendar.set(Calendar.MINUTE, 0)
@@ -159,6 +172,25 @@ data class DateFilterState(
                     
                     startTime to endTime
                 } ?: (0L to Long.MAX_VALUE)
+            }
+            DateFilterType.CUSTOM_DATE_RANGE -> {
+                if (customStartDate != null && customEndDate != null) {
+                    calendar.time = customStartDate
+                    calendar.set(Calendar.HOUR_OF_DAY, 0)
+                    calendar.set(Calendar.MINUTE, 0)
+                    calendar.set(Calendar.SECOND, 0)
+                    calendar.set(Calendar.MILLISECOND, 0)
+                    val startTime = calendar.timeInMillis
+                    
+                    calendar.time = customEndDate
+                    calendar.set(Calendar.HOUR_OF_DAY, 23)
+                    calendar.set(Calendar.MINUTE, 59)
+                    calendar.set(Calendar.SECOND, 59)
+                    calendar.set(Calendar.MILLISECOND, 999)
+                    val endTime = calendar.timeInMillis
+                    
+                    startTime to endTime
+                } else (0L to Long.MAX_VALUE)
             }
         }
     }

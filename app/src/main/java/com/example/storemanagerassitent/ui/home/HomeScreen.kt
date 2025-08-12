@@ -61,10 +61,12 @@ import com.example.storemanagerassitent.data.CategoryOption
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel(),
     onPurchaseOrderClick: () -> Unit = {},
     onSalesOrderClick: () -> Unit = {},
-    onSalesRecordClick: () -> Unit = {}
+    onSalesRecordClick: () -> Unit = {},
+    onPurchaseRecordClick: () -> Unit = {}
 ) {
     val selectedTimePeriod by viewModel.selectedTimePeriod.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -89,7 +91,7 @@ fun HomeScreen(
         }
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp),
@@ -124,6 +126,7 @@ fun HomeScreen(
                             },
                             onSecondaryActionClick = { 
                                 when (action.id) {
+                                    "purchase" -> onPurchaseRecordClick()
                                     "sales" -> onSalesRecordClick()
                                     else -> viewModel.onSecondaryActionClick(action.id)
                                 }

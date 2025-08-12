@@ -2,6 +2,8 @@ package com.example.storemanagerassitent.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,26 +108,41 @@ fun GlobalSuccessSnackbarHost(
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
-    // 监听全局成功消息状态
-    LaunchedEffect(GlobalSuccessMessage.shouldShowSuccess) {
-        if (GlobalSuccessMessage.shouldShowSuccess) {
-            // 显示成功提示
-            snackbarHostState.showSnackbar(
-                message = GlobalSuccessMessage.successMessage,
-                duration = androidx.compose.material3.SnackbarDuration.Short
-            )
-            
-            // 等待显示完成后清除状态
-            delay(2000) // 2秒后自动清除
+    // 改为优雅的中间提示：黑底白字圆角卡片，显示 1 秒
+    if (GlobalSuccessMessage.shouldShowSuccess) {
+        androidx.compose.runtime.LaunchedEffect(GlobalSuccessMessage.successMessage) {
+            delay(1000)
             GlobalSuccessMessage.clearSuccess()
         }
-    }
-    
-    SnackbarHost(
-        hostState = snackbarHostState,
-        modifier = modifier,
-        snackbar = { snackbarData ->
-            SuccessSnackbar(snackbarData = snackbarData)
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Black.copy(alpha = 0.85f),
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = GlobalSuccessMessage.successMessage,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
-    )
+    }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -290,4 +292,102 @@ private fun isToday(year: Int, month: Int, day: Int, today: Calendar): Boolean {
     return year == today.get(Calendar.YEAR) &&
             month == today.get(Calendar.MONTH) &&
             day == today.get(Calendar.DAY_OF_MONTH)
+}
+
+/**
+ * 日期范围选择器底部面板
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DateRangeCalendarBottomSheet(
+    onDismiss: () -> Unit,
+    onDateRangeSelected: (Date, Date) -> Unit
+) {
+    var startDate by remember { mutableStateOf<Date?>(null) }
+    var endDate by remember { mutableStateOf<Date?>(null) }
+    
+    ModalBottomSheet(
+        onDismissRequest = onDismiss
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // 标题
+            Text(
+                text = "选择日期范围",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            
+            // 已选择的日期范围显示
+            if (startDate != null || endDate != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "开始日期: ${startDate?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA).format(it) } ?: "未选择"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable {
+                            startDate = null
+                            endDate = null
+                        }
+                    )
+                    Text(
+                        text = "结束日期: ${endDate?.let { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.CHINA).format(it) } ?: "未选择"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable {
+                            endDate = null
+                        }
+                    )
+                }
+            }
+            
+            // 日历组件
+            CalendarView(
+                onDateSelected = { date ->
+                    when {
+                        startDate == null -> {
+                            startDate = date
+                        }
+                        endDate == null -> {
+                            if (date.after(startDate)) {
+                                endDate = date
+                            } else {
+                                startDate = date
+                                endDate = null
+                            }
+                        }
+                        else -> {
+                            startDate = date
+                            endDate = null
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            // 确认按钮
+            if (startDate != null && endDate != null) {
+                Button(
+                    onClick = {
+                        onDateRangeSelected(startDate!!, endDate!!)
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                ) {
+                    Text("确认选择")
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
 }

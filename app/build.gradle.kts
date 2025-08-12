@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    kotlin("plugin.serialization") version "1.9.0"
 }
 
 android {
@@ -55,6 +56,19 @@ dependencies {
     
     // Compose lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    
+    // ML Kit for OCR functionality
+    implementation("com.google.mlkit:text-recognition:16.0.0")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.0")
+    
+    // Coroutines support for Google Play Services (for tasks.await())
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    
+    // DataStore for data persistence
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    
+    // Kotlinx Serialization for JSON
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

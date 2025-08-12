@@ -1,4 +1,4 @@
-package com.example.storemanagerassitent.ui.sales
+package com.example.storemanagerassitent.ui.purchase
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,23 +8,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.example.storemanagerassitent.data.DateFilterState
 import com.example.storemanagerassitent.data.DateFilterType
-import com.example.storemanagerassitent.data.SalesOrder
-import com.example.storemanagerassitent.data.SalesRecordData
-import com.example.storemanagerassitent.data.SalesRecordSummary
+import com.example.storemanagerassitent.data.PurchaseOrder
+import com.example.storemanagerassitent.data.PurchaseRecordData
+import com.example.storemanagerassitent.data.PurchaseRecordSummary
 import java.util.Date
 
 /**
- * 销售记录ViewModel
+ * 进货记录ViewModel
  */
-class SalesRecordViewModel : ViewModel() {
+class PurchaseRecordViewModel : ViewModel() {
     
     // 日期筛选状态
     private val _dateFilterState = MutableStateFlow(DateFilterState())
     val dateFilterState: StateFlow<DateFilterState> = _dateFilterState.asStateFlow()
     
-    // 销售记录列表
-    private val _salesRecords = MutableStateFlow<List<SalesRecordSummary>>(emptyList())
-    val salesRecords: StateFlow<List<SalesRecordSummary>> = _salesRecords.asStateFlow()
+    // 进货记录列表
+    private val _purchaseRecords = MutableStateFlow<List<PurchaseRecordSummary>>(emptyList())
+    val purchaseRecords: StateFlow<List<PurchaseRecordSummary>> = _purchaseRecords.asStateFlow()
     
     // 是否显示日历选择器
     private val _showDatePicker = MutableStateFlow(false)
@@ -43,8 +43,8 @@ class SalesRecordViewModel : ViewModel() {
     val showOrderDetails: StateFlow<Boolean> = _showOrderDetails.asStateFlow()
     
     // 当前查看的订单详情
-    private val _selectedOrder = MutableStateFlow<SalesOrder?>(null)
-    val selectedOrder: StateFlow<SalesOrder?> = _selectedOrder.asStateFlow()
+    private val _selectedOrder = MutableStateFlow<PurchaseOrder?>(null)
+    val selectedOrder: StateFlow<PurchaseOrder?> = _selectedOrder.asStateFlow()
     
     // 加载状态
     private val _isLoading = MutableStateFlow(false)
@@ -54,27 +54,27 @@ class SalesRecordViewModel : ViewModel() {
     private val _searchText = MutableStateFlow("")
     val searchText: StateFlow<String> = _searchText.asStateFlow()
     
-    // 过滤后的销售记录
-    private val _filteredSalesRecords = MutableStateFlow<List<SalesRecordSummary>>(emptyList())
-    val filteredSalesRecords: StateFlow<List<SalesRecordSummary>> = _filteredSalesRecords.asStateFlow()
+    // 过滤后的进货记录
+    private val _filteredPurchaseRecords = MutableStateFlow<List<PurchaseRecordSummary>>(emptyList())
+    val filteredPurchaseRecords: StateFlow<List<PurchaseRecordSummary>> = _filteredPurchaseRecords.asStateFlow()
     
     init {
-        // 初始化时加载今天的销售记录
-        loadSalesRecords()
+        // 初始化时加载今天的进货记录
+        loadPurchaseRecords()
     }
     
     /**
-     * 加载销售记录
+     * 加载进货记录
      */
-    private fun loadSalesRecords() {
+    private fun loadPurchaseRecords() {
         viewModelScope.launch {
             _isLoading.value = true
             
             // 模拟网络延迟
             kotlinx.coroutines.delay(300)
             
-            val records = SalesRecordData.getSalesRecordSummaries(_dateFilterState.value)
-            _salesRecords.value = records
+            val records = PurchaseRecordData.getPurchaseRecordSummaries(_dateFilterState.value)
+            _purchaseRecords.value = records
             applySearchFilter()
             
             _isLoading.value = false
@@ -87,11 +87,11 @@ class SalesRecordViewModel : ViewModel() {
     private fun applySearchFilter() {
         val searchQuery = _searchText.value.trim()
         if (searchQuery.isEmpty()) {
-            _filteredSalesRecords.value = _salesRecords.value
+            _filteredPurchaseRecords.value = _purchaseRecords.value
         } else {
-            _filteredSalesRecords.value = _salesRecords.value.filter { record ->
+            _filteredPurchaseRecords.value = _purchaseRecords.value.filter { record ->
                 record.orderId.contains(searchQuery, ignoreCase = true) ||
-                record.customerName.contains(searchQuery, ignoreCase = true) ||
+                record.supplierName.contains(searchQuery, ignoreCase = true) ||
                 record.firstItemName.contains(searchQuery, ignoreCase = true)
             }
         }
@@ -110,7 +110,7 @@ class SalesRecordViewModel : ViewModel() {
      */
     fun setDateFilter(filterState: DateFilterState) {
         _dateFilterState.value = filterState
-        loadSalesRecords()
+        loadPurchaseRecords()
     }
     
     /**
@@ -222,7 +222,7 @@ class SalesRecordViewModel : ViewModel() {
      */
     fun showOrderDetails(orderId: String) {
         viewModelScope.launch {
-            val order = SalesRecordData.getSalesOrderById(orderId)
+            val order = PurchaseRecordData.getPurchaseOrderById(orderId)
             if (order != null) {
                 _selectedOrder.value = order
                 _showOrderDetails.value = true
@@ -242,6 +242,7 @@ class SalesRecordViewModel : ViewModel() {
      * 刷新数据
      */
     fun refresh() {
-        loadSalesRecords()
+        loadPurchaseRecords()
     }
 }
+

@@ -1,5 +1,6 @@
 package com.example.storemanagerassitent.ui.sales
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -73,6 +77,7 @@ import com.example.storemanagerassitent.data.SalesOrderItem
 @Composable
 fun SalesOrderScreen(
     onNavigateBack: () -> Unit = {},
+    prefillGoodsData: ((SalesOrderViewModel) -> Unit)? = null,
     viewModel: SalesOrderViewModel = viewModel()
 ) {
     val salesOrderState by viewModel.salesOrderState.collectAsState()
@@ -88,9 +93,11 @@ fun SalesOrderScreen(
     // 智能返回确认对话框状态
     var showExitConfirmDialog by remember { mutableStateOf(false) }
     
-    // 页面进入时重置UI状态
+    // 页面进入时重置UI状态和处理预填充数据
     LaunchedEffect(Unit) {
         viewModel.resetUIStates()
+        // 处理预填充商品数据
+        prefillGoodsData?.invoke(viewModel)
     }
     
     // 智能返回逻辑
@@ -105,6 +112,11 @@ fun SalesOrderScreen(
             onNavigateBack()
         }
     }
+
+    // 弹窗优先级：当任何弹窗显示时，返回手势应先收起弹窗
+    val hasBlockingPopup = showProductSelection || showQuantityDialog || showPriceEditDialog || showExitConfirmDialog
+    // 统一拦截系统返回/手势返回，与左上角返回按钮行为保持一致（仅当无弹窗时启用）
+    BackHandler(enabled = !hasBlockingPopup) { handleBackPress() }
     
     // 商品选择界面作为全屏覆盖
     if (showProductSelection) {
@@ -338,7 +350,7 @@ fun OrderItemCard(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                         
-                        // 简洁的数量调节器
+                            // 简洁的数量调节器（每次严格 ±1）
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -346,7 +358,10 @@ fun OrderItemCard(
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             IconButton(
-                                onClick = { if (item.quantity > 1) onUpdateQuantity(item.quantity - 1) },
+                                onClick = {
+                                    val next = (item.quantity - 1).coerceAtLeast(1)
+                                    if (next != item.quantity) onUpdateQuantity(next)
+                                },
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Text(
@@ -365,7 +380,10 @@ fun OrderItemCard(
                             )
                             
                             IconButton(
-                                onClick = { onUpdateQuantity(item.quantity + 1) },
+                                onClick = {
+                                    val next = item.quantity + 1
+                                    onUpdateQuantity(next)
+                                },
                                 modifier = Modifier.size(28.dp)
                             ) {
                                 Text(
@@ -562,8 +580,11 @@ fun BottomSettlementBar(
     onComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = bottomInset),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 8.dp,
         shadowElevation = 8.dp

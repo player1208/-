@@ -1,5 +1,6 @@
 package com.example.storemanagerassitent.ui.sales
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -39,12 +40,18 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +61,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -66,6 +77,8 @@ import com.example.storemanagerassitent.data.SalesOrderFormatter
 import com.example.storemanagerassitent.data.SalesOrderItem
 import com.example.storemanagerassitent.data.SampleData
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -83,6 +96,7 @@ fun InventoryStyleProductSelectionScreen(
     val categories = SampleData.categories
     var selectedCategory by remember { mutableStateOf("all") }
     var searchText by remember { mutableStateOf("") }
+    var isSearchFocused by remember { mutableStateOf(false) }
     // 使用ViewModel的购物车状态，不再使用本地pendingItems
     var showQuantityDialog by remember { mutableStateOf(false) }
     var selectedGoods by remember { mutableStateOf<Goods?>(null) }
@@ -109,8 +123,47 @@ fun InventoryStyleProductSelectionScreen(
         }
     }
 
+    // 弹窗优先级：当任何弹窗显示时，返回手势应先收起弹窗
+    val hasBlockingPopup = showQuantityDialog || showPendingListDialog || showExitConfirmDialog
+    // 统一拦截系统返回/手势返回，与左上角返回按钮行为保持一致（仅当无弹窗时启用）
+    BackHandler(enabled = !hasBlockingPopup) {
+        if (cartItems.isNotEmpty()) {
+            showExitConfirmDialog = true
+        } else {
+            onDismiss()
+        }
+    }
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val rootView = LocalView.current.rootView
+
+    // 规则二：键盘收起后联动收起搜索框
+    DisposableEffect(isSearchFocused) {
+        if (!isSearchFocused) return@DisposableEffect onDispose { }
+        var hasShownKeyboard = false
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { _, insets ->
+            val imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            if (imeVisible) hasShownKeyboard = true else if (hasShownKeyboard) {
+                focusManager.clearFocus()
+                isSearchFocused = false
+            }
+            insets
+        }
+        rootView.requestApplyInsets()
+        onDispose { ViewCompat.setOnApplyWindowInsetsListener(rootView, null) }
+    }
+
+    // 返回键优先收起搜索
+    BackHandler(enabled = isSearchFocused) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        isSearchFocused = false
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 TopAppBar(
                     title = {
@@ -140,6 +193,56 @@ fun InventoryStyleProductSelectionScreen(
                         }
                     }
                 )
+            },
+            bottomBar = {
+                // 贴合底部的底栏，参考进货开单
+                val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+                val bottomInset = if (imeBottom > navBottom) imeBottom else navBottom
+                Surface(tonalElevation = 8.dp, shadowElevation = 8.dp) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                                .padding(bottom = bottomInset),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { if (cartItems.isNotEmpty()) showPendingListDialog = true },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ShoppingCart,
+                                    contentDescription = "查看已选列表",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (cartItems.isNotEmpty()) "已选 ${cartItems.size} 件商品（点此查看）" else "已选 0 件商品",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    onAddConfirmedItems(cartItems)
+                                    onClearCart()
+                                    onDismiss()
+                                },
+                                enabled = cartItems.isNotEmpty(),
+                                modifier = Modifier
+                                    .height(48.dp)
+                                    .width(140.dp),
+                                shape = RoundedCornerShape(24.dp)
+                            ) {
+                                Text("完成添加")
+                            }
+                        }
+                    }
+                }
             }
         ) { paddingValues ->
             Column(
@@ -160,7 +263,8 @@ fun InventoryStyleProductSelectionScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .onFocusChanged { state -> isSearchFocused = state.isFocused },
                     shape = RoundedCornerShape(16.dp)
                 )
                 
@@ -309,11 +413,23 @@ fun InventoryStyleProductSelectionScreen(
             }
         }
         
-        // 悬浮购物车 - 固定在屏幕最左侧，紧贴合计金额灰框
-        LeftAlignedShoppingCart(
-            itemCount = cartItems.size, // 显示真实的商品数量
-            onCartClick = { showPendingListDialog = true }
-        )
+        // 规则一：点击外部区域后自动收起
+        if (isSearchFocused) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ) {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        isSearchFocused = false
+                    }
+            )
+        }
+
+        // 移除左侧悬浮购物车，改为底部栏商品清单
         
         // 数量确认对话框
         if (showQuantityDialog && selectedGoods != null) {

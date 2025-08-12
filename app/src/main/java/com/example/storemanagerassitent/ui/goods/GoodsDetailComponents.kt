@@ -65,6 +65,7 @@ fun GoodsDetailBottomSheet(
     onInboundClick: () -> Unit,
     onOutboundClick: () -> Unit,
     onCategoryEditClick: () -> Unit,
+    onStockEditClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 获取分类信息
@@ -109,7 +110,36 @@ fun GoodsDetailBottomSheet(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    DataRow("库存", "${goods.stockQuantity} 件")
+                    // 库存行（带编辑图标）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "库存",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${goods.stockQuantity} 件",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "编辑库存",
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { onStockEditClick() },
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     DataRow("进价", priceFormat.format(goods.purchasePrice))
                     Spacer(modifier = Modifier.height(8.dp))
@@ -238,13 +268,7 @@ fun OutboundReasonDialog(
             Column {
                 OutboundReason.values().forEach { reason ->
                     TextButton(
-                        onClick = { 
-                            if (reason == OutboundReason.SOLD) {
-                                // TODO: 显示"功能开发中"提示
-                            } else {
-                                onReasonSelected(reason)
-                            }
-                        },
+                        onClick = { onReasonSelected(reason) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -600,6 +624,460 @@ fun BatchCancelConfirmDialog(
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
                 Text("继续选择")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 销售数量输入对话框
+ */
+@Composable
+fun SaleQuantityDialog(
+    goods: Goods,
+    quantity: Int,
+    onDismiss: () -> Unit,
+    onQuantityChange: (Int) -> Unit,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val priceFormat = DecimalFormat("¥#0.00")
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "请输入销售数量",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 商品信息
+                Text(
+                    text = goods.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "库存: ${goods.stockQuantity} 件",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                
+                Text(
+                    text = "单价: ${priceFormat.format(goods.retailPrice)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // 数量调节器
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "数量:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    
+                    // 减少按钮
+                    IconButton(
+                        onClick = onDecrease,
+                        enabled = quantity > 1,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                color = if (quantity > 1) 
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                else 
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Text(
+                            text = "−",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (quantity > 1) 
+                                MaterialTheme.colorScheme.primary
+                            else 
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                    
+                    // 数量显示
+                    Text(
+                        text = quantity.toString(),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    // 增加按钮
+                    IconButton(
+                        onClick = onIncrease,
+                        enabled = quantity < goods.stockQuantity,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                color = if (quantity < goods.stockQuantity) 
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                else 
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Text(
+                            text = "+",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (quantity < goods.stockQuantity) 
+                                MaterialTheme.colorScheme.primary
+                            else 
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 小计显示
+                Text(
+                    text = "小计: ${priceFormat.format(goods.retailPrice * quantity)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = quantity > 0 && quantity <= goods.stockQuantity,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50)
+                )
+            ) {
+                Text(
+                    text = "去开单",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 入库数量输入对话框
+ */
+@Composable
+fun InboundQuantityDialog(
+    goods: Goods,
+    quantity: Int,
+    onDismiss: () -> Unit,
+    onQuantityChange: (Int) -> Unit,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "入库数量",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = goods.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 数量选择器
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 减少按钮
+                    IconButton(
+                        onClick = onDecrease,
+                        enabled = quantity > 1,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = if (quantity > 1) 
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                else 
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Text(
+                            text = "−",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (quantity > 1) 
+                                MaterialTheme.colorScheme.primary
+                            else 
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                    
+                    // 数量显示
+                    Text(
+                        text = quantity.toString(),
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    // 增加按钮
+                    IconButton(
+                        onClick = onIncrease,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Text(
+                            text = "+",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 当前库存显示
+                Text(
+                    text = "当前库存: ${goods.stockQuantity} 件",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = "确认入库",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 库存编辑确认对话框
+ */
+@Composable
+fun StockEditConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "库存编辑",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = "是否因库存清点错误而重新编辑库存数量？",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = "确认编辑",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 库存编辑对话框
+ */
+@Composable
+fun StockEditDialog(
+    goods: Goods,
+    quantity: Int,
+    onDismiss: () -> Unit,
+    onQuantityChange: (Int) -> Unit,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "编辑库存数量",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = goods.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 数量选择器
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 减少按钮
+                    IconButton(
+                        onClick = onDecrease,
+                        enabled = quantity > 0,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = if (quantity > 0) 
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                else 
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Text(
+                            text = "−",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (quantity > 0) 
+                                MaterialTheme.colorScheme.primary
+                            else 
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                    
+                    // 数量显示
+                    Text(
+                        text = quantity.toString(),
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    
+                    // 增加按钮
+                    IconButton(
+                        onClick = onIncrease,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        Text(
+                            text = "+",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // 当前库存显示
+                Text(
+                    text = "当前库存: ${goods.stockQuantity} 件",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = "确认更新",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
             }
         },
         modifier = modifier

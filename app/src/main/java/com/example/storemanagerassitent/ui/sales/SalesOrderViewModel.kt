@@ -10,11 +10,14 @@ import com.example.storemanagerassitent.data.SalesOrderItem
 import com.example.storemanagerassitent.data.SalesOrderState
 import com.example.storemanagerassitent.data.SampleData
 import com.example.storemanagerassitent.data.SalesRecordData
+import com.example.storemanagerassitent.data.InventoryManager
+import com.example.storemanagerassitent.data.DataStoreManager
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * 销售订单ViewModel
@@ -65,6 +68,19 @@ class SalesOrderViewModel : ViewModel() {
     private val _showCartDialog = MutableStateFlow(false)
     val showCartDialog: StateFlow<Boolean> = _showCartDialog.asStateFlow()
     
+    // 草稿ID
+    private var draftId: String = UUID.randomUUID().toString()
+    
+    // 数据存储管理器
+    private var dataStoreManager: DataStoreManager? = null
+    
+    /**
+     * 初始化数据存储管理器
+     */
+    fun initializeDataStore(dataStore: DataStoreManager) {
+        dataStoreManager = dataStore
+    }
+    
     /**
      * 显示商品选择界面
      */
@@ -94,6 +110,74 @@ class SalesOrderViewModel : ViewModel() {
         _editingOrderItem.value = null
         _priceEditAmount.value = 0.0
         _showCartDialog.value = false
+    }
+    
+    /**
+     * 保存为草稿
+     */
+    private fun saveDraft() {
+        viewModelScope.launch {
+            dataStoreManager?.let { dataStore ->
+                val currentState = _salesOrderState.value
+                val draft = DataStoreManager.SalesDraft(
+                    id = draftId,
+                    items = currentState.items,
+                    paymentMethod = currentState.paymentMethod?.name,
+                    paymentType = currentState.paymentType?.name,
+                    depositAmount = currentState.depositAmount,
+                    customerName = currentState.customerName,
+                    customerPhone = currentState.customerPhone,
+                    customerAddress = currentState.customerAddress,
+                    totalAmount = currentState.totalAmount,
+                    totalQuantity = currentState.items.sumOf { it.quantity },
+                    updatedAt = System.currentTimeMillis()
+                )
+                dataStore.saveSalesDraft(draft)
+            }
+        }
+    }
+    
+    /**
+     * 保存草稿并显示提示
+     */
+    fun saveOrderAsDraft() {
+        if (_salesOrderState.value.items.isNotEmpty()) {
+            saveDraft()
+            GlobalSuccessMessage.showSuccess("销售单已保存为草稿")
+        }
+    }
+    
+    /**
+     * 清空订单数据
+     */
+    fun clearOrderData() {
+        _salesOrderState.value = SalesOrderState()
+        draftId = UUID.randomUUID().toString()
+        GlobalSuccessMessage.showSuccess("销售单数据已清空")
+    }
+    
+    /**
+     * 加载草稿
+     */
+    fun loadDraft(draft: DataStoreManager.SalesDraft) {
+        draftId = draft.id
+        _salesOrderState.value = SalesOrderState(
+            items = draft.items,
+            paymentMethod = draft.paymentMethod?.let { PaymentMethod.valueOf(it) },
+            paymentType = draft.paymentType?.let { PaymentType.valueOf(it) },
+            depositAmount = draft.depositAmount,
+            customerName = draft.customerName,
+            customerPhone = draft.customerPhone,
+            customerAddress = draft.customerAddress
+        )
+        GlobalSuccessMessage.showSuccess("草稿已加载")
+    }
+    
+    /**
+     * 检查是否有订单商品
+     */
+    fun hasItems(): Boolean {
+        return _salesOrderState.value.items.isNotEmpty()
     }
     
     /**
@@ -138,7 +222,7 @@ class SalesOrderViewModel : ViewModel() {
         
         // 检查库存
         if (quantity > goods.stockQuantity) {
-            // TODO: 显示库存不足提示
+            GlobalSuccessMessage.showSuccess("库存不足，当前库存：${goods.stockQuantity}")
             return
         }
         
@@ -167,7 +251,8 @@ class SalesOrderViewModel : ViewModel() {
             
             // 检查累加后的数量是否超过库存
             if (newQuantity > goods.stockQuantity) {
-                GlobalSuccessMessage.showSuccess("库存不足，无法添加更多数量")
+                val remainingStock = goods.stockQuantity - existingItem.quantity
+                GlobalSuccessMessage.showSuccess("库存不足，最多还可添加 $remainingStock 件")
                 return
             }
             
@@ -180,6 +265,9 @@ class SalesOrderViewModel : ViewModel() {
         }
         
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+        
+        // 自动保存草稿
+        saveDraft()
         
         // 关闭对话框
         _showQuantityDialog.value = false
@@ -214,6 +302,9 @@ class SalesOrderViewModel : ViewModel() {
         }
         
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+        
+        // 自动保存草稿
+        saveDraft()
         
         // 关闭商品选择界面
         hideProductSelection()
@@ -251,6 +342,9 @@ class SalesOrderViewModel : ViewModel() {
         }
         
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+        
+        // 自动保存草稿
+        saveDraft()
         
         // 关闭商品选择界面
         hideProductSelection()
@@ -303,6 +397,9 @@ class SalesOrderViewModel : ViewModel() {
         val currentItems = _salesOrderState.value.items.toMutableList()
         currentItems.removeAll { it.id == itemId }
         _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -315,6 +412,9 @@ class SalesOrderViewModel : ViewModel() {
             val item = currentItems[index]
             currentItems[index] = item.copy(quantity = quantity)
             _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+            
+            // 自动保存草稿
+            saveDraft()
         }
     }
     
@@ -348,6 +448,9 @@ class SalesOrderViewModel : ViewModel() {
             val item = currentItems[index]
             currentItems[index] = item.copy(unitPrice = newPrice)
             _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+            
+            // 自动保存草稿
+            saveDraft()
         }
         
         hidePriceEditDialog()
@@ -365,6 +468,9 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun setPaymentMethod(method: PaymentMethod) {
         _salesOrderState.value = _salesOrderState.value.copy(paymentMethod = method)
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -375,6 +481,9 @@ class SalesOrderViewModel : ViewModel() {
             paymentType = type,
             depositAmount = if (type == PaymentType.FULL_PAYMENT) 0.0 else _salesOrderState.value.depositAmount
         )
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -382,6 +491,9 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun setDepositAmount(amount: Double) {
         _salesOrderState.value = _salesOrderState.value.copy(depositAmount = amount)
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -389,6 +501,9 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun setCustomerName(name: String) {
         _salesOrderState.value = _salesOrderState.value.copy(customerName = name)
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -396,6 +511,9 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun setCustomerPhone(phone: String) {
         _salesOrderState.value = _salesOrderState.value.copy(customerPhone = phone)
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -403,6 +521,9 @@ class SalesOrderViewModel : ViewModel() {
      */
     fun setCustomerAddress(address: String) {
         _salesOrderState.value = _salesOrderState.value.copy(customerAddress = address)
+        
+        // 自动保存草稿
+        saveDraft()
     }
     
     /**
@@ -413,31 +534,58 @@ class SalesOrderViewModel : ViewModel() {
         if (!state.canCompleteOrder) return
         
         viewModelScope.launch {
-            // 创建销售订单
-            val order = SalesOrder(
-                items = state.items,
-                paymentMethod = state.paymentMethod!!,
-                paymentType = state.paymentType!!,
-                depositAmount = state.depositAmount,
-                customerName = state.customerName,
-                customerPhone = state.customerPhone,
-                customerAddress = state.customerAddress,
-                totalAmount = state.totalAmount
-            )
-            
-            // 保存订单到销售记录
-            SalesRecordData.addSalesRecord(order)
-            
-            // TODO: 更新库存
-            
-            // 显示成功提示
-            GlobalSuccessMessage.showSuccess("收款成功，订单已生成")
-            
-            // 重置整个订单，准备下一个订单
-            resetOrder()
-            
-            // 执行完成回调
-            onComplete?.invoke()
+            try {
+                // 先检查库存可用性
+                val stockErrors = InventoryManager.checkSalesStockAvailability(state.items)
+                if (stockErrors.isNotEmpty()) {
+                    // 库存不足，显示错误信息
+                    val errorMessage = stockErrors.joinToString("\n")
+                    GlobalSuccessMessage.showSuccess("库存检查失败：\n$errorMessage")
+                    return@launch
+                }
+                
+                // 处理库存扣减
+                val inventoryResult = InventoryManager.processSalesOutbound(state.items)
+                if (!inventoryResult.isSuccess) {
+                    // 库存扣减失败，显示错误信息
+                    val errorMessage = inventoryResult.errors.joinToString("\n")
+                    GlobalSuccessMessage.showSuccess("库存扣减失败：\n$errorMessage")
+                    return@launch
+                }
+                
+                // 创建销售订单
+                val order = SalesOrder(
+                    items = state.items,
+                    paymentMethod = state.paymentMethod!!,
+                    paymentType = state.paymentType!!,
+                    depositAmount = state.depositAmount,
+                    customerName = state.customerName,
+                    customerPhone = state.customerPhone,
+                    customerAddress = state.customerAddress,
+                    totalAmount = state.totalAmount
+                )
+                
+                // 保存订单到销售记录
+                SalesRecordData.addSalesRecord(order)
+                
+                // 显示成功提示
+                val message = if (inventoryResult.existingGoodsUpdated > 0) {
+                    "收款成功，订单已生成，已更新 ${inventoryResult.existingGoodsUpdated} 件商品库存"
+                } else {
+                    "收款成功，订单已生成"
+                }
+                GlobalSuccessMessage.showSuccess(message)
+                
+                // 重置整个订单，准备下一个订单
+                resetOrder()
+                
+                // 执行完成回调
+                onComplete?.invoke()
+                
+            } catch (e: Exception) {
+                // 处理异常情况
+                GlobalSuccessMessage.showSuccess("订单处理失败：${e.message}")
+            }
         }
     }
     
@@ -544,24 +692,28 @@ class SalesOrderViewModel : ViewModel() {
         return SampleData.goods.filter { !it.isDelisted }
     }
     
-    /**
-     * 保存订单为草稿
-     */
-    fun saveOrderAsDraft() {
-        // TODO: 这里可以实现草稿保存逻辑，比如保存到本地存储
-        // 目前只是显示成功提示
-        if (_salesOrderState.value.items.isNotEmpty()) {
-            GlobalSuccessMessage.showSuccess("订单已保存为草稿")
-            // 保存后重置订单状态
-            resetOrder()
-        }
-    }
+
     
     /**
-     * 清空订单数据
+     * 预填充商品数据（从库存页面快捷销售）
      */
-    fun clearOrderData() {
-        resetOrder()
-        GlobalSuccessMessage.showSuccess("订单数据已清空")
+    fun prefillGoodsData(goods: Goods, quantity: Int) {
+        // 创建销售订单项
+        val orderItem = SalesOrderItem(
+            goodsId = goods.id,
+            goodsName = goods.name,
+            specifications = goods.specifications,
+            unitPrice = goods.retailPrice,
+            quantity = quantity,
+            category = goods.category
+        )
+        
+        // 直接添加到订单中
+        val currentItems = _salesOrderState.value.items.toMutableList()
+        currentItems.add(orderItem)
+        _salesOrderState.value = _salesOrderState.value.copy(items = currentItems)
+        
+        // 显示成功提示
+        GlobalSuccessMessage.showSuccess("商品已添加到销售单")
     }
 } 
