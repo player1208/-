@@ -482,20 +482,37 @@ class GoodsManagementViewModel : ViewModel() {
         val selectedIds = _selectedGoodsIds.value
         val allGoods = _allGoods.value
         val selectedGoods = allGoods.filter { it.id in selectedIds }
-        
-        // 检查哪些商品不能下架（库存不为0）
+
+        // 区分可下架与不可下架（库存不为 0）
         val problemGoods = selectedGoods.filter { !it.canBeDelisted }
-        
-        if (problemGoods.isNotEmpty()) {
-            _problemGoodsIds.value = problemGoods.map { it.id }.toSet()
+        val okGoods = selectedGoods.filter { it.canBeDelisted }
+
+        viewModelScope.launch {
+            // 先删除可下架的那部分（若有）
+            if (okGoods.isNotEmpty()) {
+                ServiceLocator.goodsRepository.deleteGoodsByIds(okGoods.map { it.id })
+            }
+
             _showBatchDelistConfirmDialog.value = false
-        } else {
-            viewModelScope.launch {
-                // 从数据库物理删除这些商品
-                ServiceLocator.goodsRepository.deleteGoodsByIds(selectedIds.toList())
-                _showBatchDelistConfirmDialog.value = false
+
+            if (problemGoods.isNotEmpty()) {
+                // 标记问题商品并保留在批量模式中，方便用户处理
+                val problemIds = problemGoods.map { it.id }.toSet()
+                _problemGoodsIds.value = problemIds
+                _selectedGoodsIds.value = problemIds
+
+                val okCount = okGoods.size
+                val problemCount = problemGoods.size
+                val message = if (okCount > 0) {
+                    "已下架 ${okCount} 件；${problemCount} 件库存不为0，未下架，已标记"
+                } else {
+                    "${problemCount} 件库存不为0，无法下架，已标记"
+                }
+                GlobalSuccessMessage.showSuccess(message)
+            } else {
+                // 全部成功，退出批量模式
                 exitBatchDelistMode()
-                GlobalSuccessMessage.showSuccess("成功下架 ${selectedIds.size} 件商品")
+                GlobalSuccessMessage.showSuccess("成功下架 ${okGoods.size} 件商品")
             }
         }
     }
