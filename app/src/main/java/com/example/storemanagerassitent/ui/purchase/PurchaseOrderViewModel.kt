@@ -44,8 +44,19 @@ class PurchaseOrderViewModel : ViewModel() {
         val currentItems = _purchaseItems.value.toMutableList()
         
         // 检查是否已存在相同商品
-        val existingIndex = currentItems.indexOfFirst { 
-            it.goodsId == item.goodsId && it.purchasePrice == item.purchasePrice 
+        // 规则：
+        // - 现有商品（goodsId 非空）：按 goodsId + purchasePrice 合并
+        // - 新建商品（goodsId 为空）：按 displayName + categoryId + purchasePrice 合并，避免不同新建商品因价格相同被错误合并
+        val existingIndex = currentItems.indexOfFirst { existing ->
+            if (item.goodsId != null && existing.goodsId != null) {
+                existing.goodsId == item.goodsId && existing.purchasePrice == item.purchasePrice
+            } else if (item.goodsId == null && existing.goodsId == null) {
+                existing.displayName == item.displayName &&
+                    existing.categoryId == item.categoryId &&
+                    existing.purchasePrice == item.purchasePrice
+            } else {
+                false
+            }
         }
         
         if (existingIndex >= 0) {
@@ -85,6 +96,18 @@ class PurchaseOrderViewModel : ViewModel() {
             saveDraft()
         }
     }
+
+    /**
+     * 按索引更新商品数量（用于购物车中存在多个 goodsId 为 null 且价格相同的场景）
+     */
+    fun updateItemQuantityAt(index: Int, newQuantity: Int) {
+        val currentItems = _purchaseItems.value.toMutableList()
+        if (index in currentItems.indices) {
+            currentItems[index] = currentItems[index].copy(quantity = newQuantity)
+            _purchaseItems.value = currentItems
+            saveDraft()
+        }
+    }
     
     /**
      * 移除商品
@@ -96,6 +119,18 @@ class PurchaseOrderViewModel : ViewModel() {
         }
         _purchaseItems.value = currentItems
         saveDraft()
+    }
+
+    /**
+     * 按索引移除商品（用于购物车中存在多个 goodsId 为 null 且价格相同的场景）
+     */
+    fun removeItemAt(index: Int) {
+        val currentItems = _purchaseItems.value.toMutableList()
+        if (index in currentItems.indices) {
+            currentItems.removeAt(index)
+            _purchaseItems.value = currentItems
+            saveDraft()
+        }
     }
     
     /**

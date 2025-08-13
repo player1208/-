@@ -646,14 +646,14 @@ fun ManualAddPurchaseScreen(
                         CartRow(
                             item = item,
                             onIncrease = {
-                                viewModel.updateItemQuantity(item.goodsId, item.purchasePrice, item.quantity + 1)
+                                viewModel.updateItemQuantityAt(index, item.quantity + 1)
                             },
                             onDecrease = {
                                 val newQ = (item.quantity - 1).coerceAtLeast(1)
-                                viewModel.updateItemQuantity(item.goodsId, item.purchasePrice, newQ)
+                                viewModel.updateItemQuantityAt(index, newQ)
                             },
                             onRemove = {
-                                viewModel.removeItem(item.goodsId, item.purchasePrice)
+                                viewModel.removeItemAt(index)
                             }
                         )
                     }
