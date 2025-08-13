@@ -6,6 +6,7 @@ import com.example.storemanagerassitent.data.Goods
 import com.example.storemanagerassitent.data.GoodsCategory
 import com.example.storemanagerassitent.data.OutboundReason
 import com.example.storemanagerassitent.data.SampleData
+import com.example.storemanagerassitent.data.db.ServiceLocator
 import com.example.storemanagerassitent.data.SortOption
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,12 +21,12 @@ import kotlinx.coroutines.launch
  */
 class GoodsManagementViewModel : ViewModel() {
     
-    // 原始商品数据
-    private val _allGoods = MutableStateFlow(SampleData.goods)
+    // 原始商品数据（来自 Room 仓库）
+    private val _allGoods = MutableStateFlow<List<Goods>>(emptyList())
     val allGoods: StateFlow<List<Goods>> = _allGoods.asStateFlow()
     
-    // 分类数据
-    private val _categories = MutableStateFlow(SampleData.categories)
+    // 分类数据（订阅数据库）
+    private val _categories = MutableStateFlow<List<GoodsCategory>>(emptyList())
     val categories: StateFlow<List<GoodsCategory>> = _categories.asStateFlow()
     
     // 搜索文本
@@ -145,6 +146,21 @@ class GoodsManagementViewModel : ViewModel() {
         stateFlow.asStateFlow()
     }
     
+    init {
+        // 订阅数据库的商品列表
+        viewModelScope.launch {
+            ServiceLocator.goodsRepository.observeGoods().collect { goods ->
+                _allGoods.value = goods
+            }
+        }
+        // 订阅数据库的分类列表
+        viewModelScope.launch {
+            ServiceLocator.categoryRepository.observeGoodsCategories().collect { list ->
+                _categories.value = list
+            }
+        }
+    }
+
     /**
      * 更新搜索文本
      */
@@ -223,9 +239,30 @@ class GoodsManagementViewModel : ViewModel() {
      * 按分类分组商品
      */
     fun getGroupedGoods(goods: List<Goods>): Map<String, List<Goods>> {
-        return goods.groupBy { goodsItem ->
-            _categories.value.find { it.id == goodsItem.category }?.name ?: "未知分类"
+        val isAll = _selectedCategory.value == "all"
+        val allCategories = _categories.value.filter { it.id != "all" }
+        val filteredCategories = if (isAll) {
+            allCategories
+        } else {
+            allCategories.filter { it.id == _selectedCategory.value }
         }
+
+        val goodsByCategoryId = goods.groupBy { it.category }
+        val ordered = linkedMapOf<String, List<Goods>>()
+
+        filteredCategories.forEach { category ->
+            val list = goodsByCategoryId[category.id] ?: emptyList()
+            ordered[category.name] = list
+        }
+
+        if (isAll) {
+            // 将未识别分类归入“未知分类”（仅在全部视图中显示）
+            val unknown = goods.filter { g -> allCategories.none { it.id == g.category } }
+            if (unknown.isNotEmpty()) {
+                ordered["未知分类"] = (ordered["未知分类"] ?: emptyList()) + unknown
+            }
+        }
+        return ordered
     }
     
     /**
@@ -345,25 +382,13 @@ class GoodsManagementViewModel : ViewModel() {
      */
     fun executeOutbound() {
         _selectedGoods.value?.let { goods ->
-            val updatedGoods = goods.copy(
-                stockQuantity = goods.stockQuantity - _outboundQuantity.value
-            )
-            
-            // 更新商品列表
-            val updatedGoodsList = _allGoods.value.map { item ->
-                if (item.id == goods.id) updatedGoods else item
+            viewModelScope.launch {
+                ServiceLocator.goodsRepository.adjustStock(goods.id, -_outboundQuantity.value)
+                _showFinalConfirmDialog.value = false
+                _outboundQuantity.value = 1
+                GlobalSuccessMessage.showSuccess("库存已更正")
             }
-            _allGoods.value = updatedGoodsList
-            
-            // 更新选中的商品
-            _selectedGoods.value = updatedGoods
         }
-        
-        _showFinalConfirmDialog.value = false
-        _outboundQuantity.value = 1
-        
-        // 显示成功提示
-        GlobalSuccessMessage.showSuccess("库存已更正")
     }
     
     // === 批量下架相关方法 ===
@@ -462,26 +487,16 @@ class GoodsManagementViewModel : ViewModel() {
         val problemGoods = selectedGoods.filter { !it.canBeDelisted }
         
         if (problemGoods.isNotEmpty()) {
-            // 有问题商品，标记并显示错误
             _problemGoodsIds.value = problemGoods.map { it.id }.toSet()
             _showBatchDelistConfirmDialog.value = false
-            // TODO: 显示错误提示
         } else {
-            // 所有商品都可以下架
-            val updatedGoodsList = allGoods.map { goods ->
-                if (goods.id in selectedIds) {
-                    goods.copy(isDelisted = true)
-                } else {
-                    goods
-                }
+            viewModelScope.launch {
+                // 从数据库物理删除这些商品
+                ServiceLocator.goodsRepository.deleteGoodsByIds(selectedIds.toList())
+                _showBatchDelistConfirmDialog.value = false
+                exitBatchDelistMode()
+                GlobalSuccessMessage.showSuccess("成功下架 ${selectedIds.size} 件商品")
             }
-            _allGoods.value = updatedGoodsList
-            
-            _showBatchDelistConfirmDialog.value = false
-            exitBatchDelistMode()
-            
-            // 显示成功提示
-            GlobalSuccessMessage.showSuccess("成功下架 ${selectedIds.size} 件商品")
         }
     }
     
@@ -657,27 +672,12 @@ class GoodsManagementViewModel : ViewModel() {
     fun confirmInbound() {
         val goods = _selectedGoods.value
         val quantity = _inboundQuantity.value
-        
         if (goods != null && quantity > 0) {
-            // 更新商品库存
-            val updatedGoods = goods.copy(stockQuantity = goods.stockQuantity + quantity)
-            _selectedGoods.value = updatedGoods
-            
-            // 更新全量商品列表中的数据
-            val updatedGoodsList = _allGoods.value.map { g ->
-                if (g.id == goods.id) {
-                    updatedGoods
-                } else {
-                    g
-                }
+            viewModelScope.launch {
+                ServiceLocator.goodsRepository.adjustStock(goods.id, quantity)
+                _showInboundQuantityDialog.value = false
+                GlobalSuccessMessage.showSuccess("入库成功！")
             }
-            _allGoods.value = updatedGoodsList
-            
-            // 隐藏对话框
-            _showInboundQuantityDialog.value = false
-            
-            // 显示成功提示
-            GlobalSuccessMessage.showSuccess("入库成功！")
         }
     }
     
@@ -748,28 +748,14 @@ class GoodsManagementViewModel : ViewModel() {
     fun confirmStockEdit() {
         val goods = _selectedGoods.value
         val quantity = _stockEditQuantity.value
-        
         if (goods != null && quantity >= 0) {
-            // 更新商品库存
-            val updatedGoods = goods.copy(stockQuantity = quantity)
-            _selectedGoods.value = updatedGoods
-            
-            // 更新全量商品列表中的数据
-            val updatedGoodsList = _allGoods.value.map { g ->
-                if (g.id == goods.id) {
-                    updatedGoods
-                } else {
-                    g
-                }
+            val delta = quantity - goods.stockQuantity
+            viewModelScope.launch {
+                ServiceLocator.goodsRepository.adjustStock(goods.id, delta)
+                _showStockEditDialog.value = false
+                _showStockEditConfirmDialog.value = false
+                GlobalSuccessMessage.showSuccess("库存已更新！")
             }
-            _allGoods.value = updatedGoodsList
-            
-            // 隐藏对话框
-            _showStockEditDialog.value = false
-            _showStockEditConfirmDialog.value = false
-            
-            // 显示成功提示
-            GlobalSuccessMessage.showSuccess("库存已更新！")
         }
     }
 }

@@ -9,10 +9,10 @@ import com.example.storemanagerassitent.data.SalesOrder
 import com.example.storemanagerassitent.data.SalesOrderItem
 import com.example.storemanagerassitent.data.SalesOrderState
 import com.example.storemanagerassitent.data.SampleData
-import com.example.storemanagerassitent.data.SalesRecordData
-import com.example.storemanagerassitent.data.InventoryManager
+// 移除模拟数据依赖，全部由 Room 仓库与真实数据驱动
 import com.example.storemanagerassitent.data.DataStoreManager
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
+import com.example.storemanagerassitent.data.db.ServiceLocator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,6 +73,10 @@ class SalesOrderViewModel : ViewModel() {
     
     // 数据存储管理器
     private var dataStoreManager: DataStoreManager? = null
+
+    // 实时商品快照（来自数据库）
+    private val _allGoods = MutableStateFlow<List<Goods>>(emptyList())
+    val goodsFlow: StateFlow<List<Goods>> = _allGoods.asStateFlow()
     
     /**
      * 初始化数据存储管理器
@@ -110,6 +114,15 @@ class SalesOrderViewModel : ViewModel() {
         _editingOrderItem.value = null
         _priceEditAmount.value = 0.0
         _showCartDialog.value = false
+    }
+
+    init {
+        // 订阅数据库商品变化，用于选择器和库存校验
+        viewModelScope.launch {
+            ServiceLocator.goodsRepository.observeGoods().collect { goods ->
+                _allGoods.value = goods
+            }
+        }
     }
     
     /**
@@ -535,25 +548,7 @@ class SalesOrderViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                // 先检查库存可用性
-                val stockErrors = InventoryManager.checkSalesStockAvailability(state.items)
-                if (stockErrors.isNotEmpty()) {
-                    // 库存不足，显示错误信息
-                    val errorMessage = stockErrors.joinToString("\n")
-                    GlobalSuccessMessage.showSuccess("库存检查失败：\n$errorMessage")
-                    return@launch
-                }
-                
-                // 处理库存扣减
-                val inventoryResult = InventoryManager.processSalesOutbound(state.items)
-                if (!inventoryResult.isSuccess) {
-                    // 库存扣减失败，显示错误信息
-                    val errorMessage = inventoryResult.errors.joinToString("\n")
-                    GlobalSuccessMessage.showSuccess("库存扣减失败：\n$errorMessage")
-                    return@launch
-                }
-                
-                // 创建销售订单
+                // 持久化订单并扣减库存
                 val order = SalesOrder(
                     items = state.items,
                     paymentMethod = state.paymentMethod!!,
@@ -564,26 +559,18 @@ class SalesOrderViewModel : ViewModel() {
                     customerAddress = state.customerAddress,
                     totalAmount = state.totalAmount
                 )
-                
-                // 保存订单到销售记录
-                SalesRecordData.addSalesRecord(order)
-                
-                // 显示成功提示
-                val message = if (inventoryResult.existingGoodsUpdated > 0) {
-                    "收款成功，订单已生成，已更新 ${inventoryResult.existingGoodsUpdated} 件商品库存"
+                val updated = ServiceLocator.salesRepository.processSaleAndSave(order)
+                val message = if (updated > 0) {
+                    "收款成功，订单已生成，已更新 ${updated} 件商品库存"
                 } else {
                     "收款成功，订单已生成"
                 }
                 GlobalSuccessMessage.showSuccess(message)
-                
-                // 重置整个订单，准备下一个订单
                 resetOrder()
-                
-                // 执行完成回调
                 onComplete?.invoke()
-                
+            } catch (e: IllegalArgumentException) {
+                GlobalSuccessMessage.showSuccess("库存检查失败：${e.message}")
             } catch (e: Exception) {
-                // 处理异常情况
                 GlobalSuccessMessage.showSuccess("订单处理失败：${e.message}")
             }
         }
@@ -689,7 +676,7 @@ class SalesOrderViewModel : ViewModel() {
      * 获取所有商品（用于商品选择）
      */
     fun getAllGoods(): List<Goods> {
-        return SampleData.goods.filter { !it.isDelisted }
+        return goodsFlow.value.filter { !it.isDelisted }
     }
     
 

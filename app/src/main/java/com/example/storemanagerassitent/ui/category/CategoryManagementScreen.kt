@@ -47,6 +47,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.storemanagerassitent.data.Category
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 
 /**
  * 分类管理页面预览
@@ -169,9 +173,15 @@ fun CategoryManagementScreen(
                 }
             } else {
                 // 分类列表
+                val isRefreshing = false
+                val pullRefreshState = rememberPullRefreshState(
+                    refreshing = isRefreshing,
+                    onRefresh = { viewModel.refreshData() }
+                )
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
+                        .pullRefresh(pullRefreshState)
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -189,6 +199,11 @@ fun CategoryManagementScreen(
                         Spacer(modifier = Modifier.height(80.dp))
                     }
                 }
+                PullRefreshIndicator(
+                    refreshing = isRefreshing,
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
             }
             
             // 加载覆盖层
@@ -212,6 +227,11 @@ fun CategoryManagementScreen(
                 }
             }
         }
+    }
+
+    // 系统返回手势与左上角返回保持一致
+    BackHandler(enabled = true) {
+        onNavigateBack()
     }
     
     // 新增分类对话框

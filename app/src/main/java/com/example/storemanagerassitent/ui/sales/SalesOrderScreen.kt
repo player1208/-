@@ -124,7 +124,7 @@ fun SalesOrderScreen(
             onDismiss = viewModel::hideProductSelection,
             onSelectProduct = viewModel::selectProduct,
             onAddConfirmedItems = viewModel::addConfirmedItems,
-            getAllGoods = viewModel::getAllGoods,
+            goodsFlow = viewModel.goodsFlow,
             cartItems = cartItems,
             onAddToCart = viewModel::addToCart,
             onRemoveFromCart = viewModel::removeFromCart,

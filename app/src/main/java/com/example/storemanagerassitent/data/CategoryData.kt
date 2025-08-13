@@ -29,6 +29,7 @@ sealed class CategoryDeleteResult {
 /**
  * 分类管理数据仓库
  */
+@Deprecated("Snapshot repository is deprecated; use Room-based repository via ServiceLocator.categoryRepository")
 object CategoryRepository {
     
     // 模拟分类数据存储

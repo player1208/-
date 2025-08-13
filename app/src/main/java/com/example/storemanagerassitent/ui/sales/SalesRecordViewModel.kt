@@ -12,6 +12,8 @@ import com.example.storemanagerassitent.data.SalesOrder
 import com.example.storemanagerassitent.data.SalesRecordData
 import com.example.storemanagerassitent.data.SalesRecordSummary
 import java.util.Date
+import com.example.storemanagerassitent.data.db.ServiceLocator
+import com.example.storemanagerassitent.data.db.toDomainOrder
 
 /**
  * 销售记录ViewModel
@@ -61,6 +63,12 @@ class SalesRecordViewModel : ViewModel() {
     init {
         // 初始化时加载今天的销售记录
         loadSalesRecords()
+        // 订阅销售订单数量变化，自动刷新
+        viewModelScope.launch {
+            ServiceLocator.database.salesOrderDao().observeCount().collect { 
+                loadSalesRecords() 
+            }
+        }
     }
     
     /**
@@ -73,8 +81,20 @@ class SalesRecordViewModel : ViewModel() {
             // 模拟网络延迟
             kotlinx.coroutines.delay(300)
             
-            val records = SalesRecordData.getSalesRecordSummaries(_dateFilterState.value)
-            _salesRecords.value = records
+            val (startTime, endTime) = _dateFilterState.value.getTimeRange()
+            val orders = ServiceLocator.salesRepository.getOrdersByRange(startTime, endTime)
+            val summaries = orders.map { (orderEntity, itemEntities) ->
+                val order = toDomainOrder(orderEntity, itemEntities)
+                SalesRecordSummary(
+                    orderId = order.id,
+                    firstItemName = order.items.firstOrNull()?.goodsName ?: "",
+                    totalItemCount = order.items.sumOf { it.quantity },
+                    totalAmount = order.totalAmount,
+                    createdAt = order.createdAt,
+                    customerName = order.customerName
+                )
+            }.sortedByDescending { it.createdAt }
+            _salesRecords.value = summaries
             applySearchFilter()
             
             _isLoading.value = false
@@ -222,9 +242,10 @@ class SalesRecordViewModel : ViewModel() {
      */
     fun showOrderDetails(orderId: String) {
         viewModelScope.launch {
-            val order = SalesRecordData.getSalesOrderById(orderId)
-            if (order != null) {
-                _selectedOrder.value = order
+            val pair = ServiceLocator.salesRepository.getOrderById(orderId)
+            if (pair != null) {
+                val (entity, items) = pair
+                _selectedOrder.value = toDomainOrder(entity, items)
                 _showOrderDetails.value = true
             }
         }

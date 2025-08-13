@@ -51,6 +51,9 @@ import com.example.storemanagerassitent.permission.PermissionManager
 import com.example.storemanagerassitent.utils.CrashReporter
 import android.util.Log
 import kotlinx.coroutines.delay
+import com.example.storemanagerassitent.data.db.ServiceLocator
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /**
  * 底部导航项
@@ -86,6 +89,17 @@ class MainActivity : ComponentActivity() {
 
         // 初始化数据存储管理器
         dataStoreManager = DataStoreManager(this)
+        // 初始化数据库与仓库
+        ServiceLocator.init(this)
+        // 禁止预置示例数据：默认 settings.seedDisabled = true（除非用户改设置）
+        lifecycleScope.launch {
+            try {
+                ServiceLocator.seedSampleDataIfAllowed(dataStoreManager)
+                Log.i("MainActivity", "Sample data seeded to Room")
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Seeding failed", e)
+            }
+        }
         
         try {
             // 初始化崩溃报告器
@@ -344,7 +358,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                     onNavigateBack = { navigateBack() }
                 )
                 AppScreen.Debug -> DebugScreen(
-                    onNavigateBack = { navigateBack() }
+                    onNavigateBack = { navigateBack() },
+                    dataStoreManager = dataStoreManager
                 )
             }
         }

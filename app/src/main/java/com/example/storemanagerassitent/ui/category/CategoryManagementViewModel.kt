@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.storemanagerassitent.data.Category
 import com.example.storemanagerassitent.data.CategoryDeleteResult
 import com.example.storemanagerassitent.data.CategoryOperationResult
-import com.example.storemanagerassitent.data.CategoryRepository
+// 移除旧的快照仓库依赖，全部使用 Room 仓库
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  */
 class CategoryManagementViewModel : ViewModel() {
     
-    // 分类列表
+    // 分类列表（Flow）
     private val _categories = MutableStateFlow<List<Category>>(emptyList())
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
     
@@ -66,22 +66,21 @@ class CategoryManagementViewModel : ViewModel() {
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     
     init {
-        loadCategories()
+        // 订阅 Room 中的分类（含商品计数）
+        viewModelScope.launch {
+            com.example.storemanagerassitent.data.db.ServiceLocator.categoryRepository
+                .observeCategoriesWithCount()
+                .collect { _categories.value = it }
+        }
     }
     
     /**
      * 加载分类列表
      */
     private fun loadCategories() {
+        // Flow 已自动更新；这里仅控制 loading 状态
         viewModelScope.launch {
-            _isLoading.value = true
-            try {
-                _categories.value = CategoryRepository.getAllCategories()
-            } catch (e: Exception) {
-                _message.value = "加载分类失败: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
+            _isLoading.value = false
         }
     }
     
@@ -115,7 +114,7 @@ class CategoryManagementViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             
-            when (val result = CategoryRepository.addCategory(_newCategoryName.value.trim())) {
+            when (val result = com.example.storemanagerassitent.data.db.ServiceLocator.categoryRepository.addCategory(_newCategoryName.value.trim())) {
                 is CategoryOperationResult.Success -> {
                     _showAddDialog.value = false
                     _newCategoryName.value = ""
@@ -167,7 +166,7 @@ class CategoryManagementViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             
-            when (val result = CategoryRepository.editCategory(category.id, _editCategoryName.value.trim())) {
+            when (val result = com.example.storemanagerassitent.data.db.ServiceLocator.categoryRepository.editCategory(category.id, _editCategoryName.value.trim())) {
                 is CategoryOperationResult.Success -> {
                     _showEditDialog.value = false
                     _editCategoryName.value = ""
@@ -190,14 +189,23 @@ class CategoryManagementViewModel : ViewModel() {
      * 尝试删除分类
      */
     fun requestDeleteCategory(category: Category) {
-        _categoryToDelete.value = category
-        
-        // 检查分类下是否有商品
-        if (CategoryRepository.hasCategoryProducts(category.id)) {
-            _deleteFailMessage.value = "无法删除该分类，请先将其中的所有商品转移到其他分类下。"
+        // 系统固定“全部”分类不可删除
+        if (category.id == "all") {
+            _deleteFailMessage.value = "“全部”为系统固定分类，无法删除。"
             _showDeleteFailDialog.value = true
-        } else {
-            _showDeleteConfirmDialog.value = true
+            return
+        }
+
+        _categoryToDelete.value = category
+        // 检查分类下是否有商品（异步）
+        viewModelScope.launch {
+            val hasProducts = com.example.storemanagerassitent.data.db.ServiceLocator.categoryRepository.hasCategoryProducts(category.id)
+            if (hasProducts) {
+                _deleteFailMessage.value = "无法删除该分类，请先将其中的所有商品转移到其他分类下。"
+                _showDeleteFailDialog.value = true
+            } else {
+                _showDeleteConfirmDialog.value = true
+            }
         }
     }
     
@@ -210,7 +218,7 @@ class CategoryManagementViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             
-            when (val result = CategoryRepository.deleteCategory(category.id)) {
+            when (val result = com.example.storemanagerassitent.data.db.ServiceLocator.categoryRepository.deleteCategory(category.id)) {
                 is CategoryDeleteResult.Success -> {
                     _showDeleteConfirmDialog.value = false
                     _categoryToDelete.value = null

@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.example.storemanagerassitent.utils.CrashReporter
+import kotlinx.coroutines.launch
+import com.example.storemanagerassitent.data.db.ServiceLocator
+import com.example.storemanagerassitent.data.DataStoreManager
 
 /**
  * 调试屏幕 - 用于查看崩溃日志和错误信息
@@ -21,8 +24,10 @@ import com.example.storemanagerassitent.utils.CrashReporter
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebugScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    dataStoreManager: DataStoreManager? = null
 ) {
+    val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
     var crashLogs by remember { mutableStateOf("") }
     var errorLogs by remember { mutableStateOf("") }
@@ -58,17 +63,21 @@ fun DebugScreen(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }
-                    IconButton(
-                        onClick = {
-                            CrashReporter.clearLogs()
-                            loadLogs { crash, error, info ->
-                                crashLogs = crash
-                                errorLogs = error
-                                logFileInfo = info
+                    IconButton(onClick = {
+                        scope.launch {
+                            // 清空 Room 全部数据
+                            ServiceLocator.adminRepository.clearAll()
+                            // 清空 DataStore 数据并禁用下次种子写入
+                            dataStoreManager?.let { ds ->
+                                ds.clearAllData()
+                                val settings = ds.getAppSettings()
+                                ds.saveAppSettings(settings.copy(seedDisabled = true))
                             }
+                            // 清理日志
+                            CrashReporter.clearLogs()
                         }
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "清空日志")
+                    }) {
+                        Icon(Icons.Default.Delete, contentDescription = "清空测试数据")
                     }
                 }
             )

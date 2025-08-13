@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.storemanagerassitent.data.DataStoreManager
 import com.example.storemanagerassitent.data.PurchaseOrderItem
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
+import com.example.storemanagerassitent.data.PurchaseOrder
+import com.example.storemanagerassitent.data.db.ServiceLocator
+import com.example.storemanagerassitent.data.Goods
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +25,10 @@ class PurchaseOrderViewModel : ViewModel() {
     
     // 数据存储管理器
     private var dataStoreManager: DataStoreManager? = null
+    
+    // 商品列表（来自数据库）
+    private val _goods = MutableStateFlow<List<Goods>>(emptyList())
+    val goods: StateFlow<List<Goods>> = _goods.asStateFlow()
     
     /**
      * 初始化数据存储管理器
@@ -52,6 +59,15 @@ class PurchaseOrderViewModel : ViewModel() {
         
         _purchaseItems.value = currentItems
         saveDraft()
+    }
+
+    init {
+        // 订阅数据库中商品
+        viewModelScope.launch {
+            ServiceLocator.goodsRepository.observeGoods().collect { list ->
+                _goods.value = list
+            }
+        }
     }
     
     /**
@@ -126,7 +142,7 @@ class PurchaseOrderViewModel : ViewModel() {
                             specifications = "",
                             purchasePrice = item.purchasePrice,
                             quantity = item.quantity,
-                            category = ""
+                            category = item.categoryId
                         )
                     },
                     totalAmount = getTotalAmount(),
@@ -160,11 +176,35 @@ class PurchaseOrderViewModel : ViewModel() {
     /**
      * 确认入库
      */
-    fun confirmInbound() {
-        if (_purchaseItems.value.isNotEmpty()) {
-            // TODO: 这里可以实现实际的入库逻辑
-            GlobalSuccessMessage.showSuccess("入库成功！")
+    fun confirmInbound(onSuccessNavigateHome: (() -> Unit)? = null) {
+        if (_purchaseItems.value.isEmpty()) return
+        viewModelScope.launch {
+            // 构造订单并写入数据库，同时更新库存
+            val items = _purchaseItems.value.map { item ->
+                PurchaseOrderItem(
+                    goodsId = item.goodsId,
+                    goodsName = item.displayName,
+                    specifications = "",
+                    purchasePrice = item.purchasePrice,
+                    quantity = item.quantity,
+                    category = item.categoryId,
+                    isNewGoods = item.goodsId == null
+                )
+            }
+            val order = PurchaseOrder(
+                items = items,
+                totalAmount = getTotalAmount(),
+                totalQuantity = getTotalQuantity()
+            )
+            val (newGoods, updatedGoods) = ServiceLocator.purchaseRepository.processInboundAndSave(order)
+            val msg = buildString {
+                append("入库成功！")
+                if (newGoods > 0) append(" 新增商品 $newGoods 件。")
+                if (updatedGoods > 0) append(" 更新库存 $updatedGoods 件。")
+            }
+            GlobalSuccessMessage.showSuccess(msg)
             clearOrderData()
+            onSuccessNavigateHome?.invoke()
         }
     }
     
@@ -178,7 +218,8 @@ class PurchaseOrderViewModel : ViewModel() {
                 goodsId = item.goodsId,
                 displayName = item.goodsName,
                 quantity = item.quantity,
-                purchasePrice = item.purchasePrice
+                purchasePrice = item.purchasePrice,
+                categoryId = item.category
             )
         }
         GlobalSuccessMessage.showSuccess("草稿已加载")

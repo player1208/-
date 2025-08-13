@@ -75,10 +75,12 @@ import kotlin.math.roundToInt
 import com.example.storemanagerassitent.data.Goods
 import com.example.storemanagerassitent.data.SalesOrderFormatter
 import com.example.storemanagerassitent.data.SalesOrderItem
-import com.example.storemanagerassitent.data.SampleData
 import com.example.storemanagerassitent.ui.components.GlobalSuccessMessage
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.StateFlow
+import com.example.storemanagerassitent.data.db.ServiceLocator
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -86,14 +88,16 @@ fun InventoryStyleProductSelectionScreen(
     onDismiss: () -> Unit,
     onSelectProduct: (Goods) -> Unit,
     onAddConfirmedItems: (List<SalesOrderItem>) -> Unit,
-    getAllGoods: () -> List<Goods>,
+    goodsFlow: StateFlow<List<Goods>>,
     cartItems: List<SalesOrderItem>,
     onAddToCart: (SalesOrderItem) -> Unit,
     onRemoveFromCart: (String) -> Unit,
     onClearCart: () -> Unit
 ) {
-    val goods = getAllGoods()
-    val categories = SampleData.categories
+    val goods by goodsFlow.collectAsState()
+    val categories by ServiceLocator.categoryRepository
+        .observeGoodsCategories()
+        .collectAsState(initial = emptyList())
     var selectedCategory by remember { mutableStateOf("all") }
     var searchText by remember { mutableStateOf("") }
     var isSearchFocused by remember { mutableStateOf(false) }
@@ -568,7 +572,7 @@ fun InventoryStyleProductSelectionScreen(
                                         }
                                     },
                                     onRemove = { onRemoveFromCart(item.id) },
-                                    maxQuantity = getAllGoods().find { it.id == item.goodsId }?.stockQuantity ?: 99
+                                    maxQuantity = goods.find { it.id == item.goodsId }?.stockQuantity ?: 99
                                 )
                             }
                         }
@@ -945,7 +949,6 @@ fun CartItemRow(
                     
                     // 数量显示 - 可点击进行精确输入
                     Surface(
-                        onClick = { showQuantityInputDialog = true },
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(4.dp),
                         modifier = Modifier.clickable { showQuantityInputDialog = true }

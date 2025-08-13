@@ -43,6 +43,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -149,10 +152,16 @@ fun SalesRecordScreen(
             )
         }
     ) { paddingValues ->
+        val isRefreshing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() }
+        )
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .pullRefresh(pullRefreshState)
         ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -280,6 +289,7 @@ fun SalesRecordScreen(
             )
         }
         }
+        // 指示器可选
     }
 }
 

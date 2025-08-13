@@ -2,7 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    kotlin("plugin.serialization") version "1.9.0"
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -50,6 +51,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    // Using local stub for pull refresh to avoid external dependency resolution issues
     // Android 12+ splash screen support (with backward compatibility)
     implementation("androidx.core:core-splashscreen:1.0.1")
     
@@ -71,6 +73,13 @@ dependencies {
     
     // Kotlinx Serialization for JSON
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+
+    // Room database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    // optional: paging
+    implementation(libs.androidx.room.paging)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

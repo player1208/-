@@ -20,6 +20,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -156,6 +160,11 @@ fun GoodsManagementScreen(
         keyboardController?.hide()
     }
 
+    // 批量下架模式下，系统返回手势等同于点击“取消”按钮（弹出取消确认）
+    BackHandler(enabled = isBatchDelistMode) {
+        viewModel.showBatchCancelConfirmDialog()
+    }
+
     // 规则二：键盘收起后搜索框联动收起（基于 WindowInsetsCompat）
     val rootView = LocalView.current.rootView
     DisposableEffect(isSearchExpanded) {
@@ -210,8 +219,15 @@ fun GoodsManagementScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            val isRefreshing by remember { mutableStateOf(false) }
+            val pullRefreshState = rememberPullRefreshState(
+                refreshing = isRefreshing,
+                onRefresh = { /* 数据基于 Flow，触发一次轻微状态变更以重组 */ }
+            )
             Column(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pullRefresh(pullRefreshState)
             ) {
                 // 分类筛选栏
                 CategoryFilterBar(
@@ -262,6 +278,11 @@ fun GoodsManagementScreen(
                         }
                 )
             }
+            PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
         
         // 详情面板
@@ -656,6 +677,7 @@ fun BottomInfoBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GoodsList(
     groupedGoods: Map<String, List<Goods>>,
@@ -679,14 +701,25 @@ fun GoodsList(
             contentPadding = PaddingValues(0.dp)
         ) {
             groupedGoods.forEach { (categoryName, goodsList) ->
-                // 退回普通标题（不使用 stickyHeader 以避免依赖)
-                item {
+                // 吸顶分类标题，并在标题上显示该分类商品数量
+                stickyHeader {
+                    val pureName = categoryName.substringBefore(" (")
+                    val headerColor = categories.find { it.name == pureName }?.colorHex?.let { colorHex ->
+                        try {
+                            Color(android.graphics.Color.parseColor(colorHex))
+                        } catch (_: IllegalArgumentException) {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    } ?: MaterialTheme.colorScheme.primary
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.background,
-                        shadowElevation = 0.dp
+                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                        shadowElevation = 2.dp
                     ) {
-                        CategoryHeader(categoryName = categoryName)
+                        CategoryHeader(
+                            categoryName = "$categoryName (${goodsList.size})",
+                            categoryColor = headerColor
+                        )
                     }
                 }
 
@@ -713,29 +746,43 @@ fun GoodsList(
 @Composable
 fun CategoryHeader(
     categoryName: String,
+    categoryColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(vertical = 12.dp),
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // 左侧彩色竖条
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(18.dp)
+                .background(categoryColor, RoundedCornerShape(2.dp))
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        // 中间标题胶囊框
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color.Transparent,
+            border = androidx.compose.foundation.BorderStroke(1.dp, categoryColor)
+        ) {
+            Text(
+                text = categoryName,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = categoryColor
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        // 右侧虚线效果用分割线近似
         HorizontalDivider(
             modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.outline
-        )
-        Text(
-            text = categoryName,
-            modifier = Modifier.padding(horizontal = 16.dp),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.outline
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
         )
     }
 }

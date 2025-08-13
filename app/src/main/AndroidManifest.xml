@@ -34,7 +34,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.StoreManagerAssitent">
+            android:theme="@style/Theme.StoreManagerAssitent.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

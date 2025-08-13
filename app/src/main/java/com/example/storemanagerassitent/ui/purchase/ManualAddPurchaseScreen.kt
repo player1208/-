@@ -2,6 +2,9 @@ package com.example.storemanagerassitent.ui.purchase
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,7 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.storemanagerassitent.data.Goods
 import com.example.storemanagerassitent.data.PurchaseOrderFormatter
-import com.example.storemanagerassitent.data.SampleData
+import com.example.storemanagerassitent.data.GoodsCategory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -52,8 +55,10 @@ fun ManualAddPurchaseScreen(
     onNavigateBack: () -> Unit,
     viewModel: PurchaseOrderViewModel = viewModel()
 ) {
-    val allGoods = remember { SampleData.goods.filter { !it.isDelisted } }
-    val categories = remember { SampleData.categories }
+    val allGoods by viewModel.goods.collectAsState()
+    // 分类改为 Room：用于筛选 UI
+    val categoriesFlow = remember { com.example.storemanagerassitent.data.db.ServiceLocator.categoryRepository.observeGoodsCategories() }
+    val categories by categoriesFlow.collectAsState(initial = emptyList())
 
     var selectedCategory by remember { mutableStateOf("all") }
     var searchText by remember { mutableStateOf("") }
@@ -171,8 +176,15 @@ fun ManualAddPurchaseScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+        val isRefreshing by remember { mutableStateOf(false) }
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isRefreshing,
+            onRefresh = { /* 数据来自 Flow，保持空实现触发重组即可 */ }
+        )
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .pullRefresh(pullRefreshState)
         ) {
             // 搜索 + 快速创建
             Row(
@@ -292,6 +304,7 @@ fun ManualAddPurchaseScreen(
                             items(list, key = { it.id }) { goods ->
                                 GoodsRow(
                                     goods = goods,
+                                    categories = categories,
                                     onAdd = { goods ->
                                         // 检查是否已存在相同商品
                                         val suggestedPrice = if (goods.purchasePrice > 0) goods.purchasePrice else goods.retailPrice * 0.8
@@ -320,6 +333,7 @@ fun ManualAddPurchaseScreen(
                         items(filteredGoods, key = { g -> g.id }) { goods: Goods ->
                             GoodsRow(
                                 goods = goods,
+                                categories = categories,
                                 onAdd = { goods ->
                                     // 检查是否已存在相同商品
                                     val suggestedPrice = if (goods.purchasePrice > 0) goods.purchasePrice else goods.retailPrice * 0.8
@@ -377,7 +391,9 @@ fun ManualAddPurchaseScreen(
                     }
                     Button(
                         onClick = {
-                            viewModel.confirmInbound()
+                            viewModel.confirmInbound(onSuccessNavigateHome = {
+                                onNavigateBack()
+                            })
                         },
                         enabled = canConfirm,
                         modifier = Modifier.height(48.dp),
@@ -386,6 +402,11 @@ fun ManualAddPurchaseScreen(
                 }
             }
         }
+        PullRefreshIndicator(
+            refreshing = isRefreshing,
+            state = pullRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
 
         // 规则一：点击外部区域后自动收起
         if (isSearchFocused) {
@@ -474,7 +495,7 @@ fun ManualAddPurchaseScreen(
                     }
                     val price = quickPrice.toDoubleOrNull() ?: 0.0
                     viewModel.addPurchaseItem(
-                        PurchaseItem(goodsId = null, displayName = quickName.trim(), quantity = quickQty, purchasePrice = price)
+                        PurchaseItem(goodsId = null, displayName = quickName.trim(), quantity = quickQty, purchasePrice = price, categoryId = quickCategoryId)
                     )
                     toastMessage = "已加入待添加"
                     showQuickCreate = false
@@ -590,7 +611,8 @@ fun ManualAddPurchaseScreen(
                                     goodsId = goods.id,
                                     displayName = goods.displayName,
                                     quantity = qty,
-                                    purchasePrice = suggestedPrice
+                                    purchasePrice = suggestedPrice,
+                                    categoryId = goods.category
                                 )
                             )
                             toastMessage = "已添加商品"
@@ -670,7 +692,8 @@ data class PurchaseItem(
     val goodsId: String?,
     val displayName: String,
     val quantity: Int,
-    val purchasePrice: Double
+    val purchasePrice: Double,
+    val categoryId: String
 )
 
 @Composable
@@ -740,14 +763,15 @@ private fun CartRow(
 @Composable
 private fun GoodsRow(
     goods: Goods,
+    categories: List<GoodsCategory>,
     onAdd: (Goods) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isLowStock = goods.stockQuantity <= 1 // 预警阈值设为1
     
     // 获取分类颜色
-    val categoryColor = remember(goods.category) {
-        val category = SampleData.categories.find { it.id == goods.category }
+    val categoryColor = remember(goods.category, categories) {
+        val category = categories.find { it.id == goods.category }
         try {
             Color(android.graphics.Color.parseColor(category?.colorHex ?: "#9C27B0"))
         } catch (_: Exception) {

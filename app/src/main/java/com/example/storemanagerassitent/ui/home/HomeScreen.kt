@@ -22,9 +22,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Card
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -70,9 +74,12 @@ fun HomeScreen(
 ) {
     val selectedTimePeriod by viewModel.selectedTimePeriod.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val categoryOptions by viewModel.categoryOptions.collectAsState()
     val salesInsightData by viewModel.salesInsightData.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val showCategoryDropdown by viewModel.showCategoryDropdown.collectAsState()
+    val showLowStockDialog by viewModel.showLowStockDialog.collectAsState()
+    val lowStockGoods by viewModel.lowStockGoods.collectAsState()
     
     Scaffold(
         topBar = {
@@ -90,11 +97,17 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
+        val isRefreshing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isRefreshing,
+            onRefresh = { viewModel.refreshData() }
+        )
         LazyColumn(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .pullRefresh(pullRefreshState),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // 核心操作区标题
@@ -184,7 +197,7 @@ fun HomeScreen(
                         // 分类选择器
                         CategorySelector(
                             selectedCategory = salesInsightData.selectedCategory,
-                            categoryOptions = viewModel.categoryOptions,
+                            categoryOptions = categoryOptions,
                             showDropdown = showCategoryDropdown,
                             onToggleDropdown = { viewModel.toggleCategoryDropdown() },
                             onCategorySelected = { viewModel.selectCategory(it.id) },
@@ -213,6 +226,52 @@ fun HomeScreen(
                 }
             }
         }
+        // 仅显示指示器（无手势实现时保持可编译）
+    }
+
+    // 库存告急提醒对话框
+    if (showLowStockDialog && lowStockGoods.isNotEmpty()) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { /* 外部不消失，确保阅读 */ },
+            title = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // 顶部黄色提示图标
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = Color(0xFFFFC107),
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "库存告急提醒",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "财务官提醒您:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.height(240.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(lowStockGoods.size) { index ->
+                            val g = lowStockGoods[index]
+                            Text("• ${g.displayName} 已告罄，请快补货吧！", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(onClick = { viewModel.dismissLowStockDialog() }) {
+                    Text("我知道了")
+                }
+            }
+        )
     }
 }
 

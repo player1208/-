@@ -74,7 +74,9 @@ class DataStoreManager(private val context: Context) {
         val autoSaveDrafts: Boolean = true,
         val reminderEnabled: Boolean = true,
         val defaultSupplier: String = "",
-        val lastBackupTime: Long = 0L
+        val lastBackupTime: Long = 0L,
+        val seedDisabled: Boolean = true,
+        val hasClearedTestData: Boolean = false
     )
     
     /**

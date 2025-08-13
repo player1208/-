@@ -3,7 +3,7 @@
 
     <style name="Theme.StoreManagerAssitent" parent="android:Theme.Material.Light.NoActionBar" />
 
-    <!-- Splash theme using startup_screen as window background -->
+    <!-- 简单启动主题：仅使用启动封面图片作为 windowBackground -->
     <style name="Theme.StoreManagerAssitent.Splash" parent="Theme.StoreManagerAssitent">
         <item name="android:windowBackground">@drawable/startup_screen</item>
     </style>

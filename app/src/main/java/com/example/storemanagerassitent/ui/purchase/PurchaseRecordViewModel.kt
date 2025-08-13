@@ -12,6 +12,8 @@ import com.example.storemanagerassitent.data.PurchaseOrder
 import com.example.storemanagerassitent.data.PurchaseRecordData
 import com.example.storemanagerassitent.data.PurchaseRecordSummary
 import java.util.Date
+import com.example.storemanagerassitent.data.db.ServiceLocator
+import com.example.storemanagerassitent.data.db.toDomainOrder
 
 /**
  * 进货记录ViewModel
@@ -61,6 +63,12 @@ class PurchaseRecordViewModel : ViewModel() {
     init {
         // 初始化时加载今天的进货记录
         loadPurchaseRecords()
+        // 订阅进货订单数量变化，自动刷新
+        viewModelScope.launch {
+            ServiceLocator.database.purchaseOrderDao().observeCount().collect { 
+                loadPurchaseRecords() 
+            }
+        }
     }
     
     /**
@@ -73,8 +81,20 @@ class PurchaseRecordViewModel : ViewModel() {
             // 模拟网络延迟
             kotlinx.coroutines.delay(300)
             
-            val records = PurchaseRecordData.getPurchaseRecordSummaries(_dateFilterState.value)
-            _purchaseRecords.value = records
+            val (startTime, endTime) = _dateFilterState.value.getTimeRange()
+            val orders = ServiceLocator.purchaseRepository.getOrdersByRange(startTime, endTime)
+            val summaries = orders.map { (orderEntity, itemEntities) ->
+                val order = toDomainOrder(orderEntity, itemEntities)
+                PurchaseRecordSummary(
+                    orderId = order.id,
+                    firstItemName = order.items.firstOrNull()?.goodsName ?: "",
+                    totalItemCount = order.items.sumOf { it.quantity },
+                    totalAmount = order.totalAmount,
+                    createdAt = order.createdAt,
+                    supplierName = order.supplierName
+                )
+            }.sortedByDescending { it.createdAt }
+            _purchaseRecords.value = summaries
             applySearchFilter()
             
             _isLoading.value = false
@@ -222,9 +242,10 @@ class PurchaseRecordViewModel : ViewModel() {
      */
     fun showOrderDetails(orderId: String) {
         viewModelScope.launch {
-            val order = PurchaseRecordData.getPurchaseOrderById(orderId)
-            if (order != null) {
-                _selectedOrder.value = order
+            val pair = ServiceLocator.purchaseRepository.getOrderById(orderId)
+            if (pair != null) {
+                val (entity, items) = pair
+                _selectedOrder.value = toDomainOrder(entity, items)
                 _showOrderDetails.value = true
             }
         }

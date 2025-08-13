@@ -61,6 +61,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+// pull refresh is optional; stubs provided elsewhere
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.pullrefresh.pullRefresh
 import com.example.storemanagerassitent.data.DateFilterType
 import com.example.storemanagerassitent.data.PurchaseOrder
 import com.example.storemanagerassitent.data.SalesOrderFormatter
@@ -151,10 +154,16 @@ fun PurchaseRecordScreen(
             )
         }
     ) { paddingValues ->
+        val isRefreshing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isRefreshing,
+            onRefresh = { viewModel.refresh() }
+        )
         androidx.compose.foundation.layout.Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .pullRefresh(pullRefreshState)
         ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -282,6 +291,7 @@ fun PurchaseRecordScreen(
             )
         }
         }
+        // 指示器可选
     }
 }
 
