@@ -54,6 +54,38 @@ class GoodsRepository(
     suspend fun findByNameAndSpec(name: String, spec: String): Goods? {
         return goodsDao.findByNameAndSpec(name, spec)?.toModel()
     }
+
+    suspend fun findByFullDisplayName(fullName: String): Goods? {
+        return goodsDao.findByFullDisplayName(fullName)?.toModel()
+    }
+
+    suspend fun updateGoodsName(goodsId: String, newName: String) {
+        val current = goodsDao.getById(goodsId) ?: return
+        val updated = current.copy(
+            name = newName,
+            lastUpdated = System.currentTimeMillis()
+        )
+        goodsDao.update(updated)
+    }
+
+    suspend fun updateGoodsPurchasePrice(goodsId: String, newPrice: Double) {
+        val current = goodsDao.getById(goodsId) ?: return
+        val updated = current.copy(
+            purchasePrice = newPrice,
+            lastUpdated = System.currentTimeMillis()
+        )
+        goodsDao.update(updated)
+    }
+
+    suspend fun updateGoodsBarcode(goodsId: String, newBarcode: String?) {
+        val current = goodsDao.getById(goodsId) ?: return
+        val normalized = newBarcode?.trim()?.ifBlank { null }
+        val updated = current.copy(
+            barcode = normalized,
+            lastUpdated = System.currentTimeMillis()
+        )
+        goodsDao.update(updated)
+    }
 }
 
 class PurchaseRepository(
@@ -81,7 +113,10 @@ class PurchaseRepository(
                         purchasePrice = if (item.purchasePrice > 0) item.purchasePrice else existing.purchasePrice,
                         lastUpdated = System.currentTimeMillis()
                     )
-                    goodsDao.update(updated)
+                    val withBarcode = if ((existing.barcode == null || existing.barcode.isBlank()) && !item.barcode.isNullOrBlank()) {
+                        updated.copy(barcode = item.barcode)
+                    } else updated
+                    goodsDao.update(withBarcode)
                     updatedGoods++
                 } else {
                     val entity = GoodsEntity(
@@ -89,6 +124,7 @@ class PurchaseRepository(
                         name = item.goodsName,
                         categoryId = item.category,
                         specifications = item.specifications,
+                        barcode = item.barcode,
                         stockQuantity = item.quantity,
                         lowStockThreshold = when {
                             item.quantity <= 5 -> 1

@@ -10,6 +10,7 @@ data class Goods(
     val specifications: String, // 规格/型号
     val stockQuantity: Int,
     val lowStockThreshold: Int = 5, // 低库存阈值，默认5件
+    val barcode: String? = null,
     val imageUrl: String? = null,
     val purchasePrice: Double = 0.0, // 进价
     val retailPrice: Double = 0.0, // 零售价

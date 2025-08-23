@@ -148,6 +148,12 @@ class HomeViewModel : ViewModel() {
 
     fun dismissLowStockDialog() { _showLowStockDialog.value = false }
 
+    fun triggerLowStockDialog() {
+        if (_lowStockGoods.value.isNotEmpty()) {
+            _showLowStockDialog.value = true
+        }
+    }
+
     init {
         // 订阅分类列表，构造成首页下拉可选项
         viewModelScope.launch {

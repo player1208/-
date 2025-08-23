@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,6 +38,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,6 +61,15 @@ import com.example.storemanagerassitent.data.Goods
 import com.example.storemanagerassitent.data.GoodsCategory
 import com.example.storemanagerassitent.data.OutboundReason
 import java.text.DecimalFormat
+import java.util.Locale
+
+private tailrec fun findFragmentActivity(context: Context?): FragmentActivity? {
+    return when (context) {
+        is FragmentActivity -> context
+        is ContextWrapper -> findFragmentActivity(context.baseContext)
+        else -> null
+    }
+}
 
 /**
  * 商品详情与操作面板 (Bottom Sheet)
@@ -66,6 +84,9 @@ fun GoodsDetailBottomSheet(
     onOutboundClick: () -> Unit,
     onCategoryEditClick: () -> Unit,
     onStockEditClick: () -> Unit,
+    onGoodsNameEditClick: () -> Unit,
+    onPurchasePriceEditClick: () -> Unit,
+    onBarcodeEditClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 获取分类信息
@@ -89,14 +110,28 @@ fun GoodsDetailBottomSheet(
                 .fillMaxWidth()
                 .padding(24.dp)
         ) {
-            // 商品名称
-            Text(
-                text = goods.displayName,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            // 商品名称（带编辑图标）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = goods.displayName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = "编辑商品名",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { onGoodsNameEditClick() },
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
             
             Spacer(modifier = Modifier.height(24.dp))
             
@@ -137,11 +172,43 @@ fun GoodsDetailBottomSheet(
                                     .size(16.dp)
                                     .clickable { onStockEditClick() },
                                 tint = MaterialTheme.colorScheme.primary
+                                
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    DataRow("进价", priceFormat.format(goods.purchasePrice))
+                    
+                    // 进价行（带编辑图标）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "进价",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = priceFormat.format(goods.purchasePrice),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "编辑进价",
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { onPurchasePriceEditClick() },
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     // 商品分类行（可点击）
@@ -177,6 +244,41 @@ fun GoodsDetailBottomSheet(
                             Icon(
                                 imageVector = Icons.Filled.Edit,
                                 contentDescription = "编辑分类",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 商品码（可编辑）
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onBarcodeEditClick() }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "商品码",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = goods.barcode ?: "未设置",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (goods.barcode == null) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "编辑商品码",
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -631,6 +733,72 @@ fun BatchCancelConfirmDialog(
 }
 
 /**
+ * 仓库总价值对话框
+ */
+@Composable
+fun WarehouseValueDialog(
+    goods: List<Goods>,
+    categories: List<GoodsCategory>,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val priceFormat = DecimalFormat("¥#0.00")
+    val categoryMap = categories.associateBy { it.id }
+    val totalsByCategory = goods.groupBy { it.category }.mapValues { (_, list) ->
+        list.sumOf { it.purchasePrice * it.stockQuantity }
+    }
+    val overall = totalsByCategory.values.sum()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "库房商品总价值",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                ) {
+                    items(totalsByCategory.entries.toList()) { entry ->
+                        val catName = categoryMap[entry.key]?.name ?: "未知分类"
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(catName, style = MaterialTheme.typography.bodyMedium)
+                            Text(priceFormat.format(entry.value), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.material3.HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("全部商品总价值", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(priceFormat.format(overall), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text("确定") }
+        },
+        modifier = modifier
+    )
+}
+
+/**
  * 销售数量输入对话框
  */
 @Composable
@@ -645,6 +813,7 @@ fun SaleQuantityDialog(
     modifier: Modifier = Modifier
 ) {
     val priceFormat = DecimalFormat("¥#0.00")
+    var quantityText by remember(quantity) { mutableStateOf(quantity.toString()) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -719,12 +888,25 @@ fun SaleQuantityDialog(
                         )
                     }
                     
-                    // 数量显示
-                    Text(
-                        text = quantity.toString(),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    // 数量输入框
+                    OutlinedTextField(
+                        value = quantityText,
+                        onValueChange = { newValue ->
+                            quantityText = newValue
+                            newValue.toIntOrNull()?.let { newQuantity ->
+                                if (newQuantity > 0 && newQuantity <= goods.stockQuantity) {
+                                    onQuantityChange(newQuantity)
+                                }
+                            }
+                        },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     )
                     
                     // 增加按钮
@@ -765,9 +947,10 @@ fun SaleQuantityDialog(
             }
         },
         confirmButton = {
+            val isValid = quantityText.toIntOrNull()?.let { it > 0 && it <= goods.stockQuantity } ?: false
             Button(
                 onClick = onConfirm,
-                enabled = quantity > 0 && quantity <= goods.stockQuantity,
+                enabled = isValid,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF4CAF50)
                 )
@@ -802,6 +985,7 @@ fun InboundQuantityDialog(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var quantityText by remember(quantity) { mutableStateOf(quantity.toString()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -854,12 +1038,25 @@ fun InboundQuantityDialog(
                         )
                     }
                     
-                    // 数量显示
-                    Text(
-                        text = quantity.toString(),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    // 数量输入框
+                    OutlinedTextField(
+                        value = quantityText,
+                        onValueChange = { newValue ->
+                            quantityText = newValue
+                            newValue.toIntOrNull()?.let { newQuantity ->
+                                if (newQuantity > 0) {
+                                    onQuantityChange(newQuantity)
+                                }
+                            }
+                        },
+                        modifier = Modifier.width(100.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.headlineLarge.copy(
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     )
                     
                     // 增加按钮
@@ -892,8 +1089,10 @@ fun InboundQuantityDialog(
             }
         },
         confirmButton = {
+            val isValid = quantityText.toIntOrNull()?.let { it > 0 } ?: false
             Button(
                 onClick = onConfirm,
+                enabled = isValid,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary
                 )
@@ -973,6 +1172,7 @@ fun StockEditDialog(
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var quantityText by remember(quantity) { mutableStateOf(quantity.toString()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -1025,12 +1225,25 @@ fun StockEditDialog(
                         )
                     }
                     
-                    // 数量显示
-                    Text(
-                        text = quantity.toString(),
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                    // 数量输入框
+                    OutlinedTextField(
+                        value = quantityText,
+                        onValueChange = { newValue ->
+                            quantityText = newValue
+                            newValue.toIntOrNull()?.let { newQuantity ->
+                                if (newQuantity >= 0) {
+                                    onQuantityChange(newQuantity)
+                                }
+                            }
+                        },
+                        modifier = Modifier.width(100.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.headlineLarge.copy(
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     )
                     
                     // 增加按钮
@@ -1071,6 +1284,206 @@ fun StockEditDialog(
             ) {
                 Text(
                     text = "确认更新",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 商品名编辑对话框
+ */
+@Composable
+fun GoodsNameEditDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "编辑商品名",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "请输入新的商品名称：",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                OutlinedTextField(
+                    value = currentName,
+                    onValueChange = onNameChange,
+                    label = { Text("商品名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = currentName.trim().isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = "确认",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 进价编辑对话框
+ */
+@Composable
+fun PurchasePriceEditDialog(
+    currentPrice: String,
+    onDismiss: () -> Unit,
+    onPriceChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "编辑进价",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "请输入新的进价：",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                OutlinedTextField(
+                    value = currentPrice,
+                    onValueChange = onPriceChange,
+                    label = { Text("进价 (元)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal
+                    ),
+                    prefix = { Text("¥") }
+                )
+            }
+        },
+        confirmButton = {
+            val isValidPrice = currentPrice.trim().toDoubleOrNull()?.let { it > 0 } == true
+            Button(
+                onClick = onConfirm,
+                enabled = isValidPrice,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = "确认",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * 商品码编辑对话框
+ */
+@Composable
+fun BarcodeEditDialog(
+    currentBarcode: String,
+    onDismiss: () -> Unit,
+    onBarcodeChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val ctx = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "编辑商品码",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "可以留空以移除商品码",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                // 改为扫码录入
+                Button(onClick = {
+                    val activity = findFragmentActivity(ctx)
+                    activity?.let { fa ->
+                        try {
+                            val fm = fa.supportFragmentManager
+                            fm.setFragmentResultListener(BarcodeScanDialogFragment.RESULT_KEY, fa) { _, bundle ->
+                                val scanned = bundle.getString(BarcodeScanDialogFragment.RESULT_BARCODE, "") ?: ""
+                                onBarcodeChange(scanned)
+                            }
+                            BarcodeScanDialogFragment().show(fm, "barcode_scan_only")
+                        } catch (_: Exception) { }
+                    }
+                }) {
+                    Text(if (currentBarcode.isBlank()) "扫码录入商品码" else "重新扫码")
+                }
+                if (currentBarcode.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("当前商品码：$currentBarcode", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = "确认",
                     fontWeight = FontWeight.Bold
                 )
             }

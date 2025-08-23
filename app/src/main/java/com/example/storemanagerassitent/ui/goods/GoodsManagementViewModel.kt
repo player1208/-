@@ -129,6 +129,31 @@ class GoodsManagementViewModel : ViewModel() {
     private val _showCategorySelector = MutableStateFlow(false)
     val showCategorySelector: StateFlow<Boolean> = _showCategorySelector.asStateFlow()
     
+    // 仓库总价值对话框
+    private val _showWarehouseValueDialog = MutableStateFlow(false)
+    val showWarehouseValueDialog: StateFlow<Boolean> = _showWarehouseValueDialog.asStateFlow()
+    
+    // 商品名编辑相关状态
+    private val _showGoodsNameEditDialog = MutableStateFlow(false)
+    val showGoodsNameEditDialog: StateFlow<Boolean> = _showGoodsNameEditDialog.asStateFlow()
+    
+    private val _editingGoodsName = MutableStateFlow("")
+    val editingGoodsName: StateFlow<String> = _editingGoodsName.asStateFlow()
+    
+    // 进价编辑相关状态
+    private val _showPurchasePriceEditDialog = MutableStateFlow(false)
+    val showPurchasePriceEditDialog: StateFlow<Boolean> = _showPurchasePriceEditDialog.asStateFlow()
+    
+    private val _editingPurchasePrice = MutableStateFlow("")
+    val editingPurchasePrice: StateFlow<String> = _editingPurchasePrice.asStateFlow()
+
+    // 商品码编辑相关状态
+    private val _showBarcodeEditDialog = MutableStateFlow(false)
+    val showBarcodeEditDialog: StateFlow<Boolean> = _showBarcodeEditDialog.asStateFlow()
+
+    private val _editingBarcode = MutableStateFlow("")
+    val editingBarcode: StateFlow<String> = _editingBarcode.asStateFlow()
+    
     // 过滤后的商品列表（排除已下架商品）
     val filteredGoods: StateFlow<List<Goods>> = combine(
         _allGoods,
@@ -173,10 +198,7 @@ class GoodsManagementViewModel : ViewModel() {
      */
     fun toggleSearchExpanded() {
         _isSearchExpanded.value = !_isSearchExpanded.value
-        // 如果收起搜索栏，清空搜索文本
-        if (!_isSearchExpanded.value) {
-            _searchText.value = ""
-        }
+        // 搜索框收起时保持搜索文本，不清空搜索状态
     }
     
     /**
@@ -582,6 +604,16 @@ class GoodsManagementViewModel : ViewModel() {
         // 显示成功提示
         GlobalSuccessMessage.showSuccess("分类已更新")
     }
+
+    // === 总价值对话框方法 ===
+    fun showWarehouseValueDialog() {
+        _showWarehouseValueDialog.value = true
+        _showMoreOptionsMenu.value = false
+    }
+
+    fun hideWarehouseValueDialog() {
+        _showWarehouseValueDialog.value = false
+    }
     
     /**
      * 显示销售数量输入对话框
@@ -767,12 +799,156 @@ class GoodsManagementViewModel : ViewModel() {
         val quantity = _stockEditQuantity.value
         if (goods != null && quantity >= 0) {
             val delta = quantity - goods.stockQuantity
+            // 立即更新本地状态，确保界面及时刷新
+            _selectedGoods.value = goods.copy(stockQuantity = quantity)
+            _allGoods.value = _allGoods.value.map { g ->
+                if (g.id == goods.id) g.copy(stockQuantity = quantity) else g
+            }
             viewModelScope.launch {
                 ServiceLocator.goodsRepository.adjustStock(goods.id, delta)
                 _showStockEditDialog.value = false
                 _showStockEditConfirmDialog.value = false
                 GlobalSuccessMessage.showSuccess("库存已更新！")
             }
+        }
+    }
+    
+    // === 商品名编辑相关方法 ===
+    
+    /**
+     * 显示商品名编辑对话框
+     */
+    fun showGoodsNameEditDialog() {
+        val goods = _selectedGoods.value
+        if (goods != null) {
+            _editingGoodsName.value = goods.name
+            _showGoodsNameEditDialog.value = true
+        }
+    }
+    
+    /**
+     * 隐藏商品名编辑对话框
+     */
+    fun hideGoodsNameEditDialog() {
+        _showGoodsNameEditDialog.value = false
+        _editingGoodsName.value = ""
+    }
+    
+    /**
+     * 更新编辑中的商品名
+     */
+    fun updateEditingGoodsName(name: String) {
+        _editingGoodsName.value = name
+    }
+    
+    /**
+     * 确认商品名编辑
+     */
+    fun confirmGoodsNameEdit() {
+        val goods = _selectedGoods.value
+        val newName = _editingGoodsName.value.trim()
+        if (goods != null && newName.isNotBlank() && newName != goods.name) {
+            // 立即更新本地状态
+            _selectedGoods.value = goods.copy(name = newName)
+            _allGoods.value = _allGoods.value.map { g -> if (g.id == goods.id) g.copy(name = newName) else g }
+            viewModelScope.launch {
+                ServiceLocator.goodsRepository.updateGoodsName(goods.id, newName)
+                _showGoodsNameEditDialog.value = false
+                _editingGoodsName.value = ""
+                GlobalSuccessMessage.showSuccess("商品名已更新！")
+            }
+        } else {
+            _showGoodsNameEditDialog.value = false
+            _editingGoodsName.value = ""
+        }
+    }
+    
+    // === 进价编辑相关方法 ===
+    
+    /**
+     * 显示进价编辑对话框
+     */
+    fun showPurchasePriceEditDialog() {
+        val goods = _selectedGoods.value
+        if (goods != null) {
+            _editingPurchasePrice.value = goods.purchasePrice.toString()
+            _showPurchasePriceEditDialog.value = true
+        }
+    }
+    
+    /**
+     * 隐藏进价编辑对话框
+     */
+    fun hidePurchasePriceEditDialog() {
+        _showPurchasePriceEditDialog.value = false
+        _editingPurchasePrice.value = ""
+    }
+    
+    /**
+     * 更新编辑中的进价
+     */
+    fun updateEditingPurchasePrice(price: String) {
+        _editingPurchasePrice.value = price
+    }
+    
+    /**
+     * 确认进价编辑
+     */
+    fun confirmPurchasePriceEdit() {
+        val goods = _selectedGoods.value
+        val newPriceStr = _editingPurchasePrice.value.trim()
+        val newPrice = newPriceStr.toDoubleOrNull()
+        
+        if (goods != null && newPrice != null && newPrice > 0 && newPrice != goods.purchasePrice) {
+            // 立即更新本地状态
+            _selectedGoods.value = goods.copy(purchasePrice = newPrice)
+            _allGoods.value = _allGoods.value.map { g -> if (g.id == goods.id) g.copy(purchasePrice = newPrice) else g }
+            viewModelScope.launch {
+                ServiceLocator.goodsRepository.updateGoodsPurchasePrice(goods.id, newPrice)
+                _showPurchasePriceEditDialog.value = false
+                _editingPurchasePrice.value = ""
+                GlobalSuccessMessage.showSuccess("进价已更新！")
+            }
+        } else {
+            _showPurchasePriceEditDialog.value = false
+            _editingPurchasePrice.value = ""
+        }
+    }
+
+    // === 商品码编辑相关方法 ===
+    fun showBarcodeEditDialog() {
+        val goods = _selectedGoods.value
+        if (goods != null) {
+            _editingBarcode.value = goods.barcode ?: ""
+            _showBarcodeEditDialog.value = true
+        }
+    }
+
+    fun hideBarcodeEditDialog() {
+        _showBarcodeEditDialog.value = false
+        _editingBarcode.value = ""
+    }
+
+    fun updateEditingBarcode(barcode: String) {
+        _editingBarcode.value = barcode
+    }
+
+    fun confirmBarcodeEdit() {
+        val goods = _selectedGoods.value
+        val newCode = _editingBarcode.value.trim().ifBlank { null }
+        if (goods != null) {
+            // 立即更新本地状态
+            _selectedGoods.value = goods.copy(barcode = newCode)
+            _allGoods.value = _allGoods.value.map { g -> if (g.id == goods.id) g.copy(barcode = newCode) else g }
+            viewModelScope.launch {
+                ServiceLocator.goodsRepository.updateGoodsBarcode(goods.id, newCode)
+                _showBarcodeEditDialog.value = false
+                _editingBarcode.value = ""
+                GlobalSuccessMessage.showSuccess(if (newCode != null) "商品码已更新！" else "已移除商品码")
+            }
+        } else {
+            _showBarcodeEditDialog.value = false
+            _editingBarcode.value = ""
         }
     }
 }

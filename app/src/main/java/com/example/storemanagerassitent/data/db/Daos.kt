@@ -37,6 +37,15 @@ interface GoodsDao {
     @Query("SELECT * FROM goods WHERE name = :name AND specifications = :spec LIMIT 1")
     suspend fun findByNameAndSpec(name: String, spec: String): GoodsEntity?
 
+    @Query("SELECT * FROM goods WHERE (name || ' ' || specifications) = :fullName OR name = :fullName LIMIT 1")
+    suspend fun findByFullDisplayName(fullName: String): GoodsEntity?
+
+    @Query("SELECT * FROM goods WHERE barcode = :barcode LIMIT 1")
+    suspend fun findByBarcode(barcode: String): GoodsEntity?
+
+    @Query("SELECT * FROM goods")
+    suspend fun getAll(): List<GoodsEntity>
+
     @Query("SELECT COUNT(*) FROM goods WHERE categoryId = :categoryId AND isDelisted = 0")
     suspend fun countByCategory(categoryId: String): Int
 

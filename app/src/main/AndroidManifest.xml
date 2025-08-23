@@ -30,11 +30,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.StoreManagerAssitent"
         tools:targetApi="31">
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.StoreManagerAssitent.Splash">
+            android:theme="@style/Theme.StoreManagerAssitent">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -42,15 +45,18 @@
             </intent-filter>
         </activity>
 
-        <!-- 裁剪选择界面：从前台服务启动，显示在其他应用之上 -->
-        <activity
-            android:name=".ui.purchase.CropSelectionActivity"
+        <!-- FileProvider for full-resolution camera capture -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
             android:exported="false"
-            android:theme="@style/Theme.StoreManagerAssitent"
-            android:launchMode="singleTop"
-            android:showOnLockScreen="true"
-            android:turnScreenOn="true"
-            android:excludeFromRecents="true" />
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+
 
         
         <!-- Screen capture service for OCR functionality -->

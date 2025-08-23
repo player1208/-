@@ -18,7 +18,8 @@ data class CategoryEntity(
     tableName = "goods",
     indices = [
         Index(value = ["name", "specifications"], unique = false),
-        Index(value = ["categoryId"], unique = false)
+        Index(value = ["categoryId"], unique = false),
+        Index(value = ["barcode"], unique = false)
     ]
 )
 data class GoodsEntity(
@@ -26,6 +27,7 @@ data class GoodsEntity(
     val name: String,
     val categoryId: String,
     val specifications: String,
+    val barcode: String?,
     val stockQuantity: Int,
     val lowStockThreshold: Int,
     val imageUrl: String?,

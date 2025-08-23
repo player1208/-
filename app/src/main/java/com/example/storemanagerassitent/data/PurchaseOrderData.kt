@@ -16,7 +16,8 @@ data class PurchaseOrderItem(
     val purchasePrice: Double, // 进货价
     val quantity: Int,
     val category: String,
-    val isNewGoods: Boolean = false // 标识是否为新商品
+    val isNewGoods: Boolean = false, // 标识是否为新商品
+    val barcode: String? = null
 ) {
     val subtotal: Double
         get() = purchasePrice * quantity

@@ -136,9 +136,20 @@ fun GoodsManagementScreen(
     val showBatchDelistConfirmDialog by viewModel.showBatchDelistConfirmDialog.collectAsState()
     val showBatchCancelConfirmDialog by viewModel.showBatchCancelConfirmDialog.collectAsState()
     val showMoreOptionsMenu by viewModel.showMoreOptionsMenu.collectAsState()
+    val showWarehouseValueDialog by viewModel.showWarehouseValueDialog.collectAsState()
     
     // 分类修改相关状态
     val showCategorySelector by viewModel.showCategorySelector.collectAsState()
+    
+    // 商品名和进价编辑相关状态
+    val showGoodsNameEditDialog by viewModel.showGoodsNameEditDialog.collectAsState()
+    val editingGoodsName by viewModel.editingGoodsName.collectAsState()
+    val showPurchasePriceEditDialog by viewModel.showPurchasePriceEditDialog.collectAsState()
+    val editingPurchasePrice by viewModel.editingPurchasePrice.collectAsState()
+
+    // 商品码编辑相关状态
+    val showBarcodeEditDialog by viewModel.showBarcodeEditDialog.collectAsState()
+    val editingBarcode by viewModel.editingBarcode.collectAsState()
     
     // 按分类分组
     val groupedGoods = remember(filteredGoods) {
@@ -208,7 +219,8 @@ fun GoodsManagementScreen(
                     showMoreOptionsMenu = showMoreOptionsMenu,
                     onMoreOptionsToggle = viewModel::toggleMoreOptionsMenu,
                     onBatchDelistClick = viewModel::enterBatchDelistMode,
-                    onNavigateToCategoryManagement = onNavigateToCategoryManagement
+                    onNavigateToCategoryManagement = onNavigateToCategoryManagement,
+                    onShowWarehouseValueDialog = viewModel::showWarehouseValueDialog
                 )
             }
         },
@@ -295,7 +307,10 @@ fun GoodsManagementScreen(
                     onInboundClick = viewModel::showInboundQuantityDialog,
                     onOutboundClick = viewModel::showOutboundReasonDialog,
                     onCategoryEditClick = viewModel::showCategorySelector,
-                    onStockEditClick = viewModel::showStockEditConfirmDialog
+                    onStockEditClick = viewModel::showStockEditConfirmDialog,
+                    onGoodsNameEditClick = viewModel::showGoodsNameEditDialog,
+                    onPurchasePriceEditClick = viewModel::showPurchasePriceEditDialog,
+                    onBarcodeEditClick = viewModel::showBarcodeEditDialog
                 )
             }
         }
@@ -414,6 +429,45 @@ fun GoodsManagementScreen(
                 )
             }
         }
+        
+        // 商品名编辑对话框
+        if (showGoodsNameEditDialog) {
+            GoodsNameEditDialog(
+                currentName = editingGoodsName,
+                onDismiss = viewModel::hideGoodsNameEditDialog,
+                onNameChange = viewModel::updateEditingGoodsName,
+                onConfirm = viewModel::confirmGoodsNameEdit
+            )
+        }
+        
+        // 进价编辑对话框
+        if (showPurchasePriceEditDialog) {
+            PurchasePriceEditDialog(
+                currentPrice = editingPurchasePrice,
+                onDismiss = viewModel::hidePurchasePriceEditDialog,
+                onPriceChange = viewModel::updateEditingPurchasePrice,
+                onConfirm = viewModel::confirmPurchasePriceEdit
+            )
+        }
+
+        // 库房商品总价值对话框
+        if (showWarehouseValueDialog) {
+            WarehouseValueDialog(
+                goods = filteredGoods,
+                categories = categories,
+                onDismiss = viewModel::hideWarehouseValueDialog
+            )
+        }
+
+        // 商品码编辑对话框
+        if (showBarcodeEditDialog) {
+            BarcodeEditDialog(
+                currentBarcode = editingBarcode,
+                onDismiss = viewModel::hideBarcodeEditDialog,
+                onBarcodeChange = viewModel::updateEditingBarcode,
+                onConfirm = viewModel::confirmBarcodeEdit
+            )
+        }
     }
 }
 
@@ -433,6 +487,7 @@ fun GoodsTopAppBar(
     onMoreOptionsToggle: () -> Unit = {},
     onBatchDelistClick: () -> Unit = {},
     onNavigateToCategoryManagement: () -> Unit = {},
+    onShowWarehouseValueDialog: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -555,6 +610,15 @@ fun GoodsTopAppBar(
                             ) 
                         },
                         onClick = onNavigateToCategoryManagement
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "库房商品总价值",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        onClick = onShowWarehouseValueDialog
                     )
                 }
             }

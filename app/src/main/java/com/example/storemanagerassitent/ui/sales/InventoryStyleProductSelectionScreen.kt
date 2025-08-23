@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -55,16 +56,18 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -81,6 +84,17 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.flow.StateFlow
 import com.example.storemanagerassitent.data.db.ServiceLocator
+import com.example.storemanagerassitent.ui.sales.SalesBatchScanDialogFragment
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.fragment.app.FragmentResultListener
+import android.os.Bundle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -94,6 +108,42 @@ fun InventoryStyleProductSelectionScreen(
     onRemoveFromCart: (String) -> Unit,
     onClearCart: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // 接收销售批量扫码结果 -> 加入底部购物车
+    DisposableEffect(Unit) {
+        val fa = findFragmentActivity(context)
+        val fm = fa?.supportFragmentManager
+        val listener = FragmentResultListener { _, result: Bundle ->
+            val list: ArrayList<Bundle>? = result.getParcelableArrayList(SalesBatchScanDialogFragment.RESULT_ITEMS)
+            if (list.isNullOrEmpty()) return@FragmentResultListener
+            scope.launch {
+                var added = 0
+                list.forEach { b ->
+                    val goodsId = b.getString(SalesBatchScanDialogFragment.ITEM_ID) ?: return@forEach
+                    val qty = b.getInt(SalesBatchScanDialogFragment.ITEM_QUANTITY).coerceAtLeast(1)
+                    val entity = withContext(Dispatchers.IO) { ServiceLocator.database.goodsDao().getById(goodsId) }
+                    if (entity != null) {
+                        val newItem = SalesOrderItem(
+                            goodsId = entity.id,
+                            goodsName = entity.name,
+                            specifications = entity.specifications,
+                            unitPrice = entity.retailPrice,
+                            quantity = qty,
+                            category = entity.categoryId
+                        )
+                        onAddToCart(newItem)
+                        added++
+                    }
+                }
+                if (added > 0) GlobalSuccessMessage.showSuccess("已添加 $added 件")
+            }
+        }
+        fm?.setFragmentResultListener(SalesBatchScanDialogFragment.RESULT_KEY, fa, listener)
+        onDispose { fm?.clearFragmentResultListener(SalesBatchScanDialogFragment.RESULT_KEY) }
+    }
+
     val goods by goodsFlow.collectAsState()
     val categories by ServiceLocator.categoryRepository
         .observeGoodsCategories()
@@ -264,6 +314,19 @@ fun InventoryStyleProductSelectionScreen(
                             imageVector = Icons.Filled.Search,
                             contentDescription = "搜索"
                         )
+                    },
+                    trailingIcon = {
+                        val ctx = LocalContext.current
+                        IconButton(onClick = {
+                            val fa = findFragmentActivity(ctx)
+                            fa?.let {
+                                try {
+                                    SalesBatchScanDialogFragment().show(it.supportFragmentManager, "sales_batch_scan")
+                                } catch (_: Exception) {}
+                            }
+                        }) {
+                            Icon(imageVector = Icons.Filled.QrCodeScanner, contentDescription = "扫码")
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1087,5 +1150,13 @@ fun CartItemRow(
                 }
             }
         )
+    }
+}
+
+private tailrec fun findFragmentActivity(context: android.content.Context?): androidx.fragment.app.FragmentActivity? {
+    return when (context) {
+        is androidx.fragment.app.FragmentActivity -> context
+        is android.content.ContextWrapper -> findFragmentActivity(context.baseContext)
+        else -> null
     }
 }

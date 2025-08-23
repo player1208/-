@@ -223,7 +223,8 @@ class PurchaseOrderViewModel : ViewModel() {
                     purchasePrice = item.purchasePrice,
                     quantity = item.quantity,
                     category = item.categoryId,
-                    isNewGoods = item.goodsId == null
+                    isNewGoods = item.goodsId == null,
+                    barcode = item.barcode
                 )
             }
             val order = PurchaseOrder(

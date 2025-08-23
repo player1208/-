@@ -3,8 +3,10 @@ package com.example.storemanagerassitent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -77,10 +79,12 @@ data class NavigationItem(
      object PurchaseRecord : AppScreen()
      object NewPurchaseEntry : AppScreen()
      object ManualAddPurchase : AppScreen()
+    object SmartClerk : AppScreen()
+    object ClerkManualAdd : AppScreen()
     object Debug : AppScreen()
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     // 数据存储管理器
     private lateinit var dataStoreManager: DataStoreManager
     
@@ -109,7 +113,10 @@ class MainActivity : ComponentActivity() {
             // 记录权限状态
             logPermissionStatus()
             
-            enableEdgeToEdge()
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+                navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            )
             setContent {
                 StoreManagerAssitentTheme {
                     var showAppSplash by remember { mutableStateOf(true) }
@@ -217,6 +224,12 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 currentScreen = AppScreen.Home
                 selectedIndex = 0
             }
+            AppScreen.SmartClerk -> {
+                currentScreen = AppScreen.NewPurchaseEntry
+            }
+            AppScreen.ClerkManualAdd -> {
+                currentScreen = AppScreen.SmartClerk
+            }
             
             AppScreen.Debug -> {
                 currentScreen = AppScreen.Profile
@@ -270,6 +283,8 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                 currentScreen != AppScreen.PurchaseRecord &&
                 currentScreen != AppScreen.NewPurchaseEntry &&
                 currentScreen != AppScreen.ManualAddPurchase &&
+                currentScreen != AppScreen.SmartClerk &&
+                currentScreen != AppScreen.ClerkManualAdd &&
                 currentScreen != AppScreen.Debug) {
                 NavigationBar {
                     navigationItems.forEachIndexed { index, item ->
@@ -345,10 +360,18 @@ fun MainScreen(dataStoreManager: DataStoreManager) {
                         navigateToScreen(AppScreen.ManualAddPurchase)
                     },
                     onSmartImportClick = {
-                        com.example.storemanagerassitent.ui.components.GlobalSuccessMessage.showSuccess("该功能正在开发中，敬请期待！")
+                        navigateToScreen(AppScreen.SmartClerk)
                     }
                 )
                 AppScreen.ManualAddPurchase -> com.example.storemanagerassitent.ui.purchase.ManualAddPurchaseScreen(
+                    onNavigateBack = { navigateBack() }
+                )
+                AppScreen.SmartClerk -> com.example.storemanagerassitent.ui.purchase.SmartClerkScreen(
+                    onNavigateBack = { navigateBack() },
+                    navigateToManualAdd = { navigateToScreen(AppScreen.ClerkManualAdd) },
+                    autoOpenSource = true
+                )
+                AppScreen.ClerkManualAdd -> com.example.storemanagerassitent.ui.purchase.ClerkManualAddScreen(
                     onNavigateBack = { navigateBack() }
                 )
                 AppScreen.SalesRecord -> SalesRecordScreen(

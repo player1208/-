@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -31,6 +32,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -48,11 +51,24 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.storemanagerassitent.permission.PermissionManager
+import com.google.mlkit.vision.barcode.common.Barcode
+import kotlinx.coroutines.launch
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import com.google.android.gms.common.ConnectionResult
+import com.google.android.gms.common.GoogleApiAvailability
+import androidx.fragment.app.FragmentActivity
+import androidx.fragment.app.FragmentResultListener
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ManualAddPurchaseScreen(
     onNavigateBack: () -> Unit,
+    fromSmartClerk: Boolean = false,
     viewModel: PurchaseOrderViewModel = viewModel()
 ) {
     val allGoods by viewModel.goods.collectAsState()
@@ -113,7 +129,62 @@ fun ManualAddPurchaseScreen(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val rootView = LocalView.current.rootView
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var isSearchFocused by remember { mutableStateOf(false) }
+
+    // 扫码弹窗相关状态
+    // 批量扫码结果监听将直接把数据加入待添加列表
+
+    fun addExistingOrNewByName(name: String, quantity: Int, categoryId: String, barcode: String? = null) {
+        coroutineScope.launch {
+            val matched = com.example.storemanagerassitent.data.db.ServiceLocator.goodsRepository.findByFullDisplayName(name)
+            if (matched != null) {
+                val suggestedPrice = if (matched.purchasePrice > 0) matched.purchasePrice else matched.retailPrice * 0.8
+            viewModel.addPurchaseItem(
+                PurchaseItem(
+                        goodsId = matched.id,
+                        displayName = matched.displayName,
+                    quantity = quantity,
+                    purchasePrice = suggestedPrice,
+                        categoryId = if (categoryId.isNotBlank()) categoryId else matched.category,
+                        barcode = matched.barcode ?: barcode
+                )
+            )
+        } else {
+            viewModel.addPurchaseItem(
+                PurchaseItem(
+                    goodsId = null,
+                        displayName = name,
+                    quantity = quantity,
+                    purchasePrice = 0.0,
+                    categoryId = categoryId,
+                    barcode = barcode
+                )
+            )
+        }
+        }
+    }
+
+    // 通过 DialogFragment 批量扫码
+    fun showBatchScanDialog() {
+        val activity = findFragmentActivity(context)
+        activity?.let {
+            val fm = it.supportFragmentManager
+            val dialog = BatchScanDialogFragment()
+            dialog.show(fm, "BatchScanDialog")
+        } ?: run {
+            toastMessage = "无法打开相机"
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            toastMessage = "相机权限被拒绝"
+            return@rememberLauncherForActivityResult
+        }
+        showBatchScanDialog()
+    }
 
     // 规则二：当软键盘收起后，搜索框失去焦点
     DisposableEffect(isSearchFocused) {
@@ -193,34 +264,42 @@ fun ManualAddPurchaseScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val showAdd = filteredGoods.isEmpty() && searchText.isNotBlank()
                 OutlinedTextField(
                     value = searchText,
                     onValueChange = { searchText = it },
                     label = { Text("搜索商品名称/规格") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (showAdd) {
+                                IconButton(onClick = {
+                                    quickName = searchText.trim()
+                                    quickQty = 1
+                                    quickCategoryId = ""
+                                    quickPrice = ""
+                                    showQuickCreate = true
+                                }) {
+                                    Icon(Icons.Filled.Add, contentDescription = "快速创建")
+                                }
+                            }
+                            IconButton(onClick = {
+                                if (PermissionManager.hasCameraPermission(context)) {
+                                    showBatchScanDialog()
+                                } else {
+                                    cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                }
+                            }) {
+                                Icon(Icons.Filled.QrCodeScanner, contentDescription = "扫码")
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .onFocusChanged { state -> isSearchFocused = state.isFocused },
                     shape = RoundedCornerShape(16.dp)
                 )
-                val showAdd = filteredGoods.isEmpty() && searchText.isNotBlank()
-                if (showAdd) {
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
-                            quickName = searchText.trim()
-                            quickQty = 1
-                            quickCategoryId = ""
-                            quickPrice = ""
-                            showQuickCreate = true
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "快速创建", tint = Color.White)
-                    }
-                }
+                
             }
 
             // 分类筛选
@@ -389,16 +468,48 @@ fun ManualAddPurchaseScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    Button(
-                        onClick = {
-                            viewModel.confirmInbound(onSuccessNavigateHome = {
+                    if (fromSmartClerk) {
+                        Button(
+                            onClick = {
+                                // 将当前购物车条目转为 ReviewableItem 并投递给智能库吏
+                                val items = cart.map { ci ->
+                                    com.example.storemanagerassitent.data.ReviewableItem(
+                                        recognizedName = ci.displayName,
+                                        recognizedSpecifications = "",
+                                        recognizedQuantity = ci.quantity,
+                                        recognizedPrice = ci.purchasePrice,
+                                        confidence = 0.85f,
+                                        editedName = ci.displayName,
+                                        editedSpecifications = "",
+                                        editedQuantity = ci.quantity,
+                                        editedPrice = ci.purchasePrice,
+                                        selectedCategory = ci.categoryId,
+                                        isExistingProduct = ci.goodsId != null
+                                    )
+                                }
+                                SmartClerkBridge.add(items)
+                                // 清空临时购物车，避免与普通手动添加共享缓存
+                                viewModel.clearItems()
+                                com.example.storemanagerassitent.ui.components.GlobalSuccessMessage.showSuccess("已添加到智能库吏")
+                                // 直接返回智能库吏（外部导航根据 manualFromSmartClerk 控制去向）
                                 onNavigateBack()
-                            })
-                        },
-                        enabled = canConfirm,
-                        modifier = Modifier.height(48.dp),
-                        shape = RoundedCornerShape(24.dp)
-                    ) { Text("确认入库") }
+                            },
+                            enabled = canConfirm,
+                            modifier = Modifier.height(48.dp),
+                            shape = RoundedCornerShape(24.dp)
+                        ) { Text("添加到智能库吏") }
+                    } else {
+                        Button(
+                            onClick = {
+                                viewModel.confirmInbound(onSuccessNavigateHome = {
+                                    onNavigateBack()
+                                })
+                            },
+                            enabled = canConfirm,
+                            modifier = Modifier.height(48.dp),
+                            shape = RoundedCornerShape(24.dp)
+                        ) { Text("确认入库") }
+                    }
                 }
             }
         }
@@ -631,6 +742,40 @@ fun ManualAddPurchaseScreen(
         )
     }
 
+    // 批量扫码结果接收：将弹窗返回的商品名称和数量加入底部待确认列表
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context) {
+        val activity = findFragmentActivity(context)
+        val manager = activity?.supportFragmentManager
+        val listener = FragmentResultListener { _, bundle ->
+            val list = bundle.getParcelableArrayList<android.os.Bundle>(BatchScanDialogFragment.RESULT_ITEMS)
+            list?.forEach { b ->
+                val name = b.getString(BatchScanDialogFragment.ITEM_NAME, "").trim()
+                val qty = b.getInt(BatchScanDialogFragment.ITEM_QUANTITY, 1)
+                val catId = b.getString(BatchScanDialogFragment.ITEM_CATEGORY_ID, "")
+                val barcode = b.getString(BatchScanDialogFragment.ITEM_BARCODE, "").trim()
+                if (name.isNotBlank() && qty > 0) {
+                    if (barcode.isNotBlank()) {
+                        // 若扫描返回了条码，并且匹配到现有商品且其条码为空，则补写条码（IO协程）
+                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val dao = com.example.storemanagerassitent.data.db.ServiceLocator.database.goodsDao()
+                            val existing = dao.findByFullDisplayName(name)
+                            if (existing != null && (existing.barcode == null || existing.barcode.isBlank())) {
+                                dao.update(existing.copy(barcode = barcode, lastUpdated = System.currentTimeMillis()))
+                            }
+                        }
+                    }
+                    addExistingOrNewByName(name, qty, catId)
+                }
+            }
+            if (!list.isNullOrEmpty()) {
+                toastMessage = "已添加到待添加订单"
+            }
+        }
+        manager?.setFragmentResultListener(BatchScanDialogFragment.RESULT_KEY, lifecycleOwner, listener)
+        onDispose { }
+    }
+
     if (showCartSheet) {
         ModalBottomSheet(onDismissRequest = { showCartSheet = false }) {
             Column(modifier = Modifier
@@ -643,8 +788,11 @@ fun ManualAddPurchaseScreen(
                     }
                 } else {
                     cart.forEachIndexed { index, item ->
+                        val catName = categories.firstOrNull { it.id == item.categoryId }?.name
+                            ?: if (item.categoryId.isBlank()) "未分类" else "未知分类"
                         CartRow(
                             item = item,
+                            categoryName = catName,
                             onIncrease = {
                                 viewModel.updateItemQuantityAt(index, item.quantity + 1)
                             },
@@ -670,21 +818,56 @@ fun ManualAddPurchaseScreen(
     
     // 智能退出确认对话框
     if (showExitConfirmDialog) {
+        val saveAction: () -> Unit = if (fromSmartClerk) {
+            {
+                showExitConfirmDialog = false
+                // 将当前购物车条目转为 ReviewableItem 并投递给智能库吏
+                val items = viewModel.purchaseItems.value.map { ci ->
+                    com.example.storemanagerassitent.data.ReviewableItem(
+                        recognizedName = ci.displayName,
+                        recognizedSpecifications = "",
+                        recognizedQuantity = ci.quantity,
+                        recognizedPrice = ci.purchasePrice,
+                        confidence = 0.85f,
+                        editedName = ci.displayName,
+                        editedSpecifications = "",
+                        editedQuantity = ci.quantity,
+                        editedPrice = ci.purchasePrice,
+                        selectedCategory = ci.categoryId,
+                        isExistingProduct = ci.goodsId != null
+                    )
+                }
+                SmartClerkBridge.add(items)
+                viewModel.clearItems()
+                onNavigateBack()
+            }
+        } else {
+            {
+                showExitConfirmDialog = false
+                viewModel.saveOrderAsDraft()
+                onNavigateBack()
+            }
+        }
         ExitConfirmationDialog(
             orderItemsCount = viewModel.getItemTypesCount(),
             onDismiss = { showExitConfirmDialog = false },
             onContinueEdit = { showExitConfirmDialog = false },
             onDiscardAndExit = {
                 showExitConfirmDialog = false
-                viewModel.clearOrderData() // 清空订单数据
+                viewModel.clearOrderData()
                 onNavigateBack()
             },
-            onSaveAndExit = {
-                showExitConfirmDialog = false
-                viewModel.saveOrderAsDraft() // 保存为草稿
-                onNavigateBack()
-            }
+            onSaveAndExit = saveAction,
+            saveButtonText = if (fromSmartClerk) "添加到智能库吏并返回" else "保存并退出"
         )
+    }
+}
+
+private tailrec fun findFragmentActivity(context: Context?): FragmentActivity? {
+    return when (context) {
+        is FragmentActivity -> context
+        is ContextWrapper -> findFragmentActivity(context.baseContext)
+        else -> null
     }
 }
 
@@ -693,7 +876,8 @@ data class PurchaseItem(
     val displayName: String,
     val quantity: Int,
     val purchasePrice: Double,
-    val categoryId: String
+    val categoryId: String,
+    val barcode: String? = null
 )
 
 @Composable
@@ -733,6 +917,7 @@ private fun ElegantTopToast(toastMessage: String?, onDismiss: () -> Unit) {
 @Composable
 private fun CartRow(
     item: PurchaseItem,
+    categoryName: String,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
     onRemove: () -> Unit
@@ -749,6 +934,8 @@ private fun CartRow(
                 Text(item.displayName, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                 Text("进货价: ${PurchaseOrderFormatter.formatCurrency(item.purchasePrice)}", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                Text("分类: ${categoryName}", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { onDecrease() }, enabled = item.quantity > 1) { Text("−") }
@@ -845,7 +1032,8 @@ fun ExitConfirmationDialog(
     onDismiss: () -> Unit,
     onContinueEdit: () -> Unit,
     onDiscardAndExit: () -> Unit,
-    onSaveAndExit: () -> Unit
+    onSaveAndExit: () -> Unit,
+    saveButtonText: String = "保存并退出"
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -883,7 +1071,7 @@ fun ExitConfirmationDialog(
                             )
                         ) {
                             Text(
-                                text = "保存并退出",
+                                text = saveButtonText,
                                 color = Color.White,
                                 fontWeight = FontWeight.Medium
                             )

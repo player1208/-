@@ -88,7 +88,7 @@ fun NewPurchaseEntryScreen(
                 onClick = onManualAddClick
             )
 
-            // 智能批量导入卡片
+            // 智能库吏卡片
             FeatureCard(
                 icon = {
                     Icon(
@@ -98,8 +98,8 @@ fun NewPurchaseEntryScreen(
                         modifier = Modifier.size(28.dp)
                     )
                 },
-                title = "智能批量导入",
-                description = "通过截图快速导入货单，未来将支持自动识别。",
+                title = "智能库吏",
+                description = "拍照/相册识别整张货单，审核后一键添加。",
                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 onClick = onSmartImportClick
             )

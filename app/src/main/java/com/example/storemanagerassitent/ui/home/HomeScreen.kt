@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -93,7 +94,30 @@ fun HomeScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
-                )
+                ),
+                actions = {
+                    val zeroCount by viewModel.lowStockGoods.collectAsState()
+                    val count = zeroCount.count { it.stockQuantity == 0 }
+                    androidx.compose.material3.BadgedBox(
+                        modifier = Modifier.padding(end = 12.dp),
+                        badge = {
+                            if (count > 0) {
+                                androidx.compose.material3.Badge {
+                                    Text("$count")
+                                }
+                            }
+                        }
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = Icons.Filled.Notifications,
+                            contentDescription = "库存告急",
+                            tint = if (count > 0) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clickable { viewModel.triggerLowStockDialog() }
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
